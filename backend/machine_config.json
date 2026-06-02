@@ -1,0 +1,453 @@
+{
+  "schema_version": "3.0.0",
+  "description": "Neutral Glass - G Tank Electrical Condition Monitoring",
+  "parameter_units": {
+    "current": "A",
+    "temperature": "C",
+    "vibration": "mm/s"
+  },
+  "plants": {
+    "GT": {
+      "name": "G Tank",
+      "site": "Neutral Glass",
+      "machines": {
+        "G1 Lehr": {
+          "description": "Lehr Area G1",
+          "parameters": [
+            "current",
+            "temperature",
+            "vibration"
+          ],
+          "motors": {
+            "Lehr Fan 1": {
+              "normal_current": 12,
+              "warning_current": 15,
+              "normal_temperature": 55,
+              "warning_temperature": 70,
+              "normal_vibration": 4.5,
+              "warning_vibration": 7.0
+            },
+            "Lehr Fan 2": {
+              "normal_current": 12,
+              "warning_current": 15,
+              "normal_temperature": 55,
+              "warning_temperature": 70,
+              "normal_vibration": 4.5,
+              "warning_vibration": 7.0
+            },
+            "Lehr Fan 3": {
+              "normal_current": 12,
+              "warning_current": 15,
+              "normal_temperature": 55,
+              "warning_temperature": 70,
+              "normal_vibration": 4.5,
+              "warning_vibration": 7.0
+            },
+            "Lehr Fan 4": {
+              "normal_current": 12,
+              "warning_current": 15,
+              "normal_temperature": 55,
+              "warning_temperature": 70,
+              "normal_vibration": 4.5,
+              "warning_vibration": 7.0
+            },
+            "Lehr Fan 5": {
+              "normal_current": 12,
+              "warning_current": 15,
+              "normal_temperature": 55,
+              "warning_temperature": 70,
+              "normal_vibration": 4.5,
+              "warning_vibration": 7.0
+            },
+            "Lehr Fan 6": {
+              "normal_current": 12,
+              "warning_current": 15,
+              "normal_temperature": 55,
+              "warning_temperature": 70,
+              "normal_vibration": 4.5,
+              "warning_vibration": 7.0
+            },
+            "Lehr Belt": {
+              "normal_current": 18,
+              "warning_current": 22,
+              "normal_temperature": 50,
+              "warning_temperature": 65,
+              "normal_vibration": 5.0,
+              "warning_vibration": 8.0
+            },
+            "Cleaning Conveyor": {
+              "normal_current": 18,
+              "warning_current": 22,
+              "normal_temperature": 50,
+              "warning_temperature": 65,
+              "normal_vibration": 5.0,
+              "warning_vibration": 8.0
+            }
+          }
+        },
+        "G2 Lehr": {
+          "description": "Lehr Area G2",
+          "parameters": [
+            "current",
+            "temperature",
+            "vibration"
+          ],
+          "motors": {
+            "Lehr Fan 1": {
+              "normal_current": 12,
+              "warning_current": 15,
+              "normal_temperature": 55,
+              "warning_temperature": 70,
+              "normal_vibration": 4.5,
+              "warning_vibration": 7.0
+            },
+            "Lehr Fan 2": {
+              "normal_current": 12,
+              "warning_current": 15,
+              "normal_temperature": 55,
+              "warning_temperature": 70,
+              "normal_vibration": 4.5,
+              "warning_vibration": 7.0
+            },
+            "Lehr Fan 3": {
+              "normal_current": 12,
+              "warning_current": 15,
+              "normal_temperature": 55,
+              "warning_temperature": 70,
+              "normal_vibration": 4.5,
+              "warning_vibration": 7.0
+            },
+            "Lehr Fan 4": {
+              "normal_current": 12,
+              "warning_current": 15,
+              "normal_temperature": 55,
+              "warning_temperature": 70,
+              "normal_vibration": 4.5,
+              "warning_vibration": 7.0
+            },
+            "Lehr Fan 5": {
+              "normal_current": 12,
+              "warning_current": 15,
+              "normal_temperature": 55,
+              "warning_temperature": 70,
+              "normal_vibration": 4.5,
+              "warning_vibration": 7.0
+            },
+            "Lehr Fan 6": {
+              "normal_current": 12,
+              "warning_current": 15,
+              "normal_temperature": 55,
+              "warning_temperature": 70,
+              "normal_vibration": 4.5,
+              "warning_vibration": 7.0
+            },
+            "Lehr Belt": {
+              "normal_current": 18,
+              "warning_current": 22,
+              "normal_temperature": 50,
+              "warning_temperature": 65,
+              "normal_vibration": 5.0,
+              "warning_vibration": 8.0
+            },
+            "Cleaning Conveyor": {
+              "normal_current": 18,
+              "warning_current": 22,
+              "normal_temperature": 50,
+              "warning_temperature": 65,
+              "normal_vibration": 5.0,
+              "warning_vibration": 8.0
+            }
+          }
+        },
+        "G3 Lehr": {
+          "description": "Lehr Area G3",
+          "parameters": [
+            "current",
+            "temperature",
+            "vibration"
+          ],
+          "motors": {
+            "Lehr Fan 1": {
+              "normal_current": 12,
+              "warning_current": 15,
+              "normal_temperature": 55,
+              "warning_temperature": 70,
+              "normal_vibration": 4.5,
+              "warning_vibration": 7.0
+            },
+            "Lehr Fan 2": {
+              "normal_current": 12,
+              "warning_current": 15,
+              "normal_temperature": 55,
+              "warning_temperature": 70,
+              "normal_vibration": 4.5,
+              "warning_vibration": 7.0
+            },
+            "Lehr Fan 3": {
+              "normal_current": 12,
+              "warning_current": 15,
+              "normal_temperature": 55,
+              "warning_temperature": 70,
+              "normal_vibration": 4.5,
+              "warning_vibration": 7.0
+            },
+            "Lehr Fan 4": {
+              "normal_current": 12,
+              "warning_current": 15,
+              "normal_temperature": 55,
+              "warning_temperature": 70,
+              "normal_vibration": 4.5,
+              "warning_vibration": 7.0
+            },
+            "Lehr Fan 5": {
+              "normal_current": 12,
+              "warning_current": 15,
+              "normal_temperature": 55,
+              "warning_temperature": 70,
+              "normal_vibration": 4.5,
+              "warning_vibration": 7.0
+            },
+            "Lehr Fan 6": {
+              "normal_current": 12,
+              "warning_current": 15,
+              "normal_temperature": 55,
+              "warning_temperature": 70,
+              "normal_vibration": 4.5,
+              "warning_vibration": 7.0
+            },
+            "Lehr Belt": {
+              "normal_current": 18,
+              "warning_current": 22,
+              "normal_temperature": 50,
+              "warning_temperature": 65,
+              "normal_vibration": 5.0,
+              "warning_vibration": 8.0
+            },
+            "Cleaning Conveyor": {
+              "normal_current": 18,
+              "warning_current": 22,
+              "normal_temperature": 50,
+              "warning_temperature": 65,
+              "normal_vibration": 5.0,
+              "warning_vibration": 8.0
+            }
+          }
+        },
+        "Furnace Cooling Blower": {
+          "description": "Furnace Cooling Blower (132 kW)",
+          "parameters": [
+            "current",
+            "temperature",
+            "vibration"
+          ],
+          "motors": {
+            "Drive": {
+              "normal_current": 200,
+              "warning_current": 240,
+              "normal_temperature": 60,
+              "warning_temperature": 75,
+              "normal_vibration": 6.0,
+              "warning_vibration": 10.0
+            },
+            "Star Delta": {
+              "normal_current": 200,
+              "warning_current": 240,
+              "normal_temperature": 60,
+              "warning_temperature": 75,
+              "normal_vibration": 6.0,
+              "warning_vibration": 10.0
+            }
+          }
+        },
+        "Mold Cooling Blower": {
+          "description": "Mold Cooling Blower (160 kW)",
+          "parameters": [
+            "current",
+            "temperature",
+            "vibration"
+          ],
+          "motors": {
+            "MCB1": {
+              "normal_current": 200,
+              "warning_current": 240,
+              "normal_temperature": 60,
+              "warning_temperature": 75,
+              "normal_vibration": 6.0,
+              "warning_vibration": 10.0
+            },
+            "MCB2": {
+              "normal_current": 200,
+              "warning_current": 240,
+              "normal_temperature": 60,
+              "warning_temperature": 75,
+              "normal_vibration": 6.0,
+              "warning_vibration": 10.0
+            },
+            "MCB3": {
+              "normal_current": 200,
+              "warning_current": 240,
+              "normal_temperature": 60,
+              "warning_temperature": 75,
+              "normal_vibration": 6.0,
+              "warning_vibration": 10.0
+            }
+          }
+        },
+        "Combustion Blower": {
+          "description": "Combustion Blower",
+          "parameters": [
+            "current",
+            "temperature",
+            "vibration"
+          ],
+          "motors": {
+            "CB1": {
+              "normal_current": 45,
+              "warning_current": 55,
+              "normal_temperature": 55,
+              "warning_temperature": 70,
+              "normal_vibration": 5.0,
+              "warning_vibration": 8.0
+            },
+            "CB2": {
+              "normal_current": 45,
+              "warning_current": 55,
+              "normal_temperature": 55,
+              "warning_temperature": 70,
+              "normal_vibration": 5.0,
+              "warning_vibration": 8.0
+            },
+            "CB3": {
+              "normal_current": 45,
+              "warning_current": 55,
+              "normal_temperature": 55,
+              "warning_temperature": 70,
+              "normal_vibration": 5.0,
+              "warning_vibration": 8.0
+            }
+          }
+        },
+        "Block Air Fan": {
+          "description": "Block Air Fan",
+          "parameters": [
+            "current",
+            "temperature",
+            "vibration"
+          ],
+          "motors": {
+            "BAF1": {
+              "normal_current": 12,
+              "warning_current": 15,
+              "normal_temperature": 55,
+              "warning_temperature": 70,
+              "normal_vibration": 4.5,
+              "warning_vibration": 7.0
+            },
+            "BAF2": {
+              "normal_current": 12,
+              "warning_current": 15,
+              "normal_temperature": 55,
+              "warning_temperature": 70,
+              "normal_vibration": 4.5,
+              "warning_vibration": 7.0
+            },
+            "BAF3": {
+              "normal_current": 12,
+              "warning_current": 15,
+              "normal_temperature": 55,
+              "warning_temperature": 70,
+              "normal_vibration": 4.5,
+              "warning_vibration": 7.0
+            }
+          }
+        },
+        "Injector Blower": {
+          "description": "Injector Blower",
+          "parameters": [
+            "current",
+            "temperature",
+            "vibration"
+          ],
+          "motors": {
+            "IB1": {
+              "normal_current": 45,
+              "warning_current": 55,
+              "normal_temperature": 55,
+              "warning_temperature": 70,
+              "normal_vibration": 5.0,
+              "warning_vibration": 8.0
+            },
+            "IB2": {
+              "normal_current": 45,
+              "warning_current": 55,
+              "normal_temperature": 55,
+              "warning_temperature": 70,
+              "normal_vibration": 5.0,
+              "warning_vibration": 8.0
+            },
+            "IB3": {
+              "normal_current": 45,
+              "warning_current": 55,
+              "normal_temperature": 55,
+              "warning_temperature": 70,
+              "normal_vibration": 5.0,
+              "warning_vibration": 8.0
+            }
+          }
+        },
+        "Electrode Cooling Blower": {
+          "description": "Electrode Cooling Blower",
+          "parameters": [
+            "current",
+            "temperature",
+            "vibration"
+          ],
+          "motors": {
+            "ECB1": {
+              "normal_current": 12,
+              "warning_current": 15,
+              "normal_temperature": 55,
+              "warning_temperature": 70,
+              "normal_vibration": 4.5,
+              "warning_vibration": 7.0
+            }
+          }
+        },
+        "Electrode Water Pump": {
+          "description": "Electrode Water Pump",
+          "parameters": [
+            "current",
+            "temperature",
+            "vibration"
+          ],
+          "motors": {
+            "EWP1": {
+              "normal_current": 25,
+              "warning_current": 32,
+              "normal_temperature": 45,
+              "warning_temperature": 60,
+              "normal_vibration": 4.0,
+              "warning_vibration": 6.5
+            },
+            "EWP2": {
+              "normal_current": 25,
+              "warning_current": 32,
+              "normal_temperature": 45,
+              "warning_temperature": 60,
+              "normal_vibration": 4.0,
+              "warning_vibration": 6.5
+            },
+            "EWP3": {
+              "normal_current": 25,
+              "warning_current": 32,
+              "normal_temperature": 45,
+              "warning_temperature": 60,
+              "normal_vibration": 4.0,
+              "warning_vibration": 6.5
+            }
+          }
+        }
+      }
+    }
+  }
+}
