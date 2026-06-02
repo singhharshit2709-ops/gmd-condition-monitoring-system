@@ -1,13 +1,13 @@
 # Release Notes — v1.0.0
 
-**Product:** Neutral Glass — G Tank Electrical Condition Monitoring  
+**Product:** Neutral Glass — General Maintenance Department Condition Monitoring System  
 **Release date:** May 2026  
 **Production commit:** `a594a83`  
 **API schema:** `machine_config.json` v3.0.0  
 
 ## Summary
 
-First production release of the G Tank ECM system: hosted dashboard on Render, FastAPI backend, Google Sheets audit log, bulk field entry, and real-time alarm/warning classification for 10 areas and 42 motors (plant GT).
+First production release of the GMD condition monitoring system: hosted dashboard on Render, FastAPI backend, Google Sheets audit log, bulk field entry, and real-time alarm/warning classification for 10 areas and 42 motors (plant GT).
 
 ## Features
 

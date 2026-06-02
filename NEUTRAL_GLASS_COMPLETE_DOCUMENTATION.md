@@ -1,7 +1,7 @@
 1. Executive Summary
 1.1 Purpose
 
-The G Tank Electrical Condition Monitoring System is a web-based monitoring application developed to record, monitor, and analyze critical electrical equipment parameters across G Tank operations. The system enables maintenance personnel and engineers to monitor equipment current, temperature, and vibration values through a centralized dashboard, facilitating proactive maintenance planning and improved equipment reliability.
+The General Maintenance Department Condition Monitoring System is a web-based monitoring application developed to record, monitor, and analyze critical equipment parameters across General Maintenance Department operations. The system enables maintenance personnel and engineers to monitor equipment current, temperature, and vibration values through a centralized dashboard, facilitating proactive maintenance planning and improved equipment reliability.
 
 1.2 Key Benefits
 Centralized monitoring of electrical equipment health
@@ -22,7 +22,7 @@ Reliability and Condition Monitoring Personnel
 2. System Overview
 2.1 Application Type
 
-Web-Based Electrical Condition Monitoring Application
+Web-Based Condition Monitoring Application
 
 2.2 Access Methods
 Desktop Browser Access
@@ -31,7 +31,7 @@ Tablet Support
 Cloud-Based Remote Accessibility
 2.3 Objective
 
-The primary objective of the system is to digitize electrical condition monitoring activities within G Tank operations by providing a centralized platform for recording, analyzing, and visualizing equipment operating parameters.
+The primary objective of the system is to digitize condition monitoring activities within General Maintenance Department operations by providing a centralized platform for recording, analyzing, and visualizing equipment operating parameters.
 
 2.4 Monitored Parameters
 
@@ -77,7 +77,7 @@ Monitoring data is stored and synchronized through Google Sheets integration, pr
 4. Equipment Configuration
 4.1 Monitored Areas
 
-The Electrical Condition Monitoring System currently monitors the following G Tank equipment areas:
+The General Maintenance Department Condition Monitoring System currently monitors the following equipment areas:
 
 G1 Lehr
 G2 Lehr
@@ -210,14 +210,14 @@ Following deployment, end-to-end validation was performed to verify dashboard fu
 
 The project successfully achieved the following outcomes:
 
-Transformation of an existing monitoring architecture into an Electrical Condition Monitoring Dashboard.
+Transformation of an existing monitoring architecture into a Condition Monitoring Dashboard.
 Successful integration of React.js frontend and FastAPI backend services.
 Configuration and validation of Google Sheets-based data management.
 Deployment of the monitoring dashboard in a production environment.
 Standardization of G1 Lehr, G2 Lehr, and G3 Lehr monitoring areas.
 Validation of dashboard functionality, API responses, and data synchronization workflows.
 Enhancement of backend persistence mechanisms to improve dashboard reliability after application restarts.
-Successful implementation of electrical condition monitoring functionality for G Tank operations.
+Successful implementation of condition monitoring functionality for General Maintenance Department operations.
 10. Future Scope
 
 Future enhancements can further improve system capabilities through:
@@ -242,4 +242,4 @@ Reliability Analytics
 Energy Monitoring and Analysis
 11. Conclusion
 
-The G Tank Electrical Condition Monitoring System successfully demonstrated the application of digital technologies in industrial maintenance and equipment monitoring. The project involved studying existing software architecture, understanding condition monitoring principles, customizing a React.js and FastAPI-based application, integrating Google Sheets for centralized data storage, and supporting deployment and validation activities. The implementation enhanced monitoring efficiency, improved accessibility of maintenance data, and established a scalable foundation for future predictive maintenance and AI-assisted analytics initiatives within Gerresheimer's G Tank operations.
+The General Maintenance Department Condition Monitoring System successfully demonstrated the application of digital technologies in industrial maintenance and equipment monitoring. The project involved studying existing software architecture, understanding condition monitoring principles, customizing a React.js and FastAPI-based application, integrating Google Sheets for centralized data storage, and supporting deployment and validation activities. The implementation enhanced monitoring efficiency, improved accessibility of maintenance data, and established a scalable foundation for future predictive maintenance and AI-assisted analytics initiatives within Gerresheimer's General Maintenance Department operations.

@@ -1,6 +1,6 @@
-# G Tank Electrical Condition Monitoring — Production Release
+# General Maintenance Department Condition Monitoring System — Production Release
 
-**Plant:** GT (Neutral Glass G Tank)  
+**Plant:** GT (Neutral Glass GMD)  
 **API version:** 3.0.0  
 **Repository:** https://github.com/singhharshit2709-ops/electrical-condition-monitoring-system
 

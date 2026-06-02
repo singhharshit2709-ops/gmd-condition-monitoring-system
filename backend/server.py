@@ -1,5 +1,5 @@
 """
-server.py  –  Electrical Condition Monitoring  |  FastAPI Backend
+server.py  –  General Maintenance Department Condition Monitoring System  |  FastAPI Backend
 =================================================================
 Architecture
 ------------
@@ -31,6 +31,9 @@ from typing import Any
 
 from dotenv import load_dotenv
 from routes.gmd_monitoring import router as gmd_router
+from routes.dashboard import router as dashboard_router 
+from routes.reports import router as reports_router
+from routes.trends import router as trends_router
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, JSONResponse
@@ -992,14 +995,17 @@ class MachineConfigResponse(BaseModel):
 # ════════════════════════════════════════════════════════════════�[...]
 
 app = FastAPI(
-    title="Electrical Condition Monitoring API",
+    title="General Maintenance Department Condition Monitoring API",
     description=(
-        "Threshold-based motor health monitoring. "
-        "All limits are driven by machine_config.json – zero hardcoded values."
+        "Threshold-based condition monitoring for General Maintenance Department equipment. "
+        "All parameter limits and health calculations are driven through configurable machine settings."
     ),
     version="3.0.0",
 )
 app.include_router(gmd_router)
+app.include_router(dashboard_router)
+app.include_router(reports_router)
+app.include_router(trends_router) 
 
 app.add_middleware(
     CORSMiddleware,
@@ -1508,7 +1514,7 @@ def _serve_dashboard_index() -> FileResponse | JSONResponse:
     return JSONResponse(
         status_code=503,
         content={
-            "service": "Electrical Condition Monitoring API",
+            "service": "General Maintenance Department Condition Monitoring API",
             "dashboard_ready": False,
             "docs": "/docs",
             "health": "/health",

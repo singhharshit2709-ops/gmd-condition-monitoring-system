@@ -21,20 +21,20 @@ const Dashboard = () => {
 
   const fetchData = async () => {
     try {
-      const [areaHealthResponse, alarmsResponse, recentResponse] = await Promise.all([
-        axios.get(`${API}/machine-health/${PLANT_ID}`),
-        axios.get(`${API}/active-alarms`),
-        axios.get(`${API}/condition-monitoring/recent`),
-      ]);
+      const [
+  summaryResponse,
+  recentResponse,
+  alarmsResponse,
+  healthResponse
+] = await Promise.all([
+  axios.get(`${API}/dashboard/summary`),
+  axios.get(`${API}/dashboard/recent-readings`),
+  axios.get(`${API}/dashboard/active-alarms`),
+  axios.get(`${API}/dashboard/equipment-health`)
+]); 
 
-      const areas = areaHealthResponse.data;
-      setAreaHealth(areas);
-      setEquipmentSummary({
-        total: areas.reduce((s, a) => s + (a.total || 0), 0),
-        ok: areas.reduce((s, a) => s + (a.ok || 0), 0),
-        warning: areas.reduce((s, a) => s + (a.warning || 0), 0),
-        alarm: areas.reduce((s, a) => s + (a.alarm || 0), 0),
-      });
+      setEquipmentSummary(summaryResponse.data);
+      setAreaHealth(healthResponse.data); 
       setActiveAlarms(alarmsResponse.data);
       setRecentReadings(recentResponse.data);
     } catch (e) {
@@ -63,10 +63,7 @@ const Dashboard = () => {
     return <span className="px-2 py-1 bg-[#16A34A] text-white text-xs font-bold uppercase tracking-wider">NORMAL</span>;
   };
 
-  const readingVibration = (reading) => reading.vibration ?? reading.i2t;
-  const alarmVibration = (alarm) => alarm.vibration ?? alarm.i2t;
-  const alarmNormalVibration = (alarm) => alarm.normal_vibration ?? alarm.normal_i2t;
-  const alarmWarningVibration = (alarm) => alarm.warning_vibration ?? alarm.warning_i2t;
+
 
   if (loading) {
     return (
@@ -83,7 +80,10 @@ const Dashboard = () => {
           Neutral Glass
         </h1>
         <p className="text-sm text-zinc-700 mt-2">
-          G Tank Electrical Condition Monitoring — current, temperature, and vibration across all areas
+          General Maintenance Department Condition Monitoring System
+        </p>
+        <p className="text-sm text-zinc-700 mt-2">
+          Monitoring equipment health, condition parameters, and maintenance trends across the facility
         </p>
       </div>
 
@@ -106,9 +106,9 @@ const Dashboard = () => {
                     <div className="flex items-start justify-between mb-2">
                       <div>
                         <p className="text-base font-medium text-zinc-950">
-                          {alarm.machine} — {alarm.motor}
+                          {alarm.equipment}
                         </p>
-                        <p className="text-xs text-zinc-500 mt-1">Plant {alarm.plant}</p>
+                        <p className="text-xs text-zinc-500 mt-1">{alarm.category || "—"}</p>
                       </div>
                       <span className="px-2 py-1 bg-[#E11D48] text-white text-xs font-bold uppercase">ALARM</span>
                     </div>
@@ -119,30 +119,19 @@ const Dashboard = () => {
                       Acknowledge
                     </button>
                     <div className="mt-3 space-y-2">
-                      {alarm.current !== "" && alarm.current != null && (
+                      {alarm.parameter && (
                         <div className="border-l-2 border-red-200 pl-3">
                           <p className="text-sm text-zinc-700">
-                            <span className="font-bold">Current:</span>
-                            <span className="font-mono text-[#E11D48] font-bold ml-2">{alarm.current} A</span>
+                            <span className="font-bold">Parameter:</span>
+                            <span className="font-mono text-[#E11D48] font-bold ml-2">{alarm.parameter}</span>
                           </p>
                         </div>
                       )}
-                      {alarm.temperature !== "" && alarm.temperature != null && (
+                      {alarm.value != null && alarm.value !== "" && (
                         <div className="border-l-2 border-red-200 pl-3">
                           <p className="text-sm text-zinc-700">
-                            <span className="font-bold">Temperature:</span>
-                            <span className="font-mono text-[#E11D48] font-bold ml-2">{alarm.temperature} °C</span>
-                          </p>
-                        </div>
-                      )}
-                      {alarmVibration(alarm) !== "" && alarmVibration(alarm) != null && (
-                        <div className="border-l-2 border-red-200 pl-3">
-                          <p className="text-sm text-zinc-700">
-                            <span className="font-bold">Vibration:</span>
-                            <span className="font-mono text-[#E11D48] font-bold ml-2">{alarmVibration(alarm)} mm/s</span>
-                          </p>
-                          <p className="text-xs text-zinc-600 mt-0.5">
-                            Normal: {alarmNormalVibration(alarm) ?? "—"} | Warning: {alarmWarningVibration(alarm) ?? "—"}
+                            <span className="font-bold">Value:</span>
+                            <span className="font-mono text-[#E11D48] font-bold ml-2">{alarm.value}</span>
                           </p>
                         </div>
                       )}
@@ -199,25 +188,25 @@ const Dashboard = () => {
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-4">
                 {areaHealth.map((area) => (
                   <div
-                    key={area.machine}
+                    key={area.equipment}
                     className="border-l-4 border-[#002FA7] pl-4 py-3"
-                    data-testid={`area-health-${area.machine}`}
+                    data-testid={`area-health-${area.equipment}`}
                   >
                     <div className="flex items-center justify-between mb-2">
-                      <h4 className="text-sm font-medium text-zinc-950 leading-tight">{area.machine}</h4>
+                      <h4 className="text-sm font-medium text-zinc-950 leading-tight">{area.equipment}</h4>
                       <span
                         className={`text-2xl font-mono font-light ${
-                          area.health_percent >= 90 ? "text-[#16A34A]" : area.health_percent >= 70 ? "text-yellow-700" : "text-[#E11D48]"
+                          area.health_percentage >= 90 ? "text-[#16A34A]" : area.health_percentage >= 70 ? "text-yellow-700" : "text-[#E11D48]"
                         }`}
                       >
-                        {area.health_percent}%
+                        {area.health_percentage}%
                       </span>
                     </div>
                     <div className="grid grid-cols-2 gap-1 text-xs">
-                      <span className="text-zinc-600">OK: <span className="font-mono font-bold">{area.ok}</span></span>
-                      <span className="text-zinc-600">Warn: <span className="font-mono font-bold">{area.warning}</span></span>
-                      <span className="text-zinc-600">Alarm: <span className="font-mono font-bold">{area.alarm}</span></span>
-                      <span className="text-zinc-600">Total: <span className="font-mono font-bold">{area.total}</span></span>
+                      <span className="text-zinc-600">OK: <span className="font-mono font-bold">{area.normal_count}</span></span>
+                      <span className="text-zinc-600">Warn: <span className="font-mono font-bold">{area.warning_count}</span></span>
+                      <span className="text-zinc-600">Alarm: <span className="font-mono font-bold">{area.alarm_count}</span></span>
+                      <span className="text-zinc-600">Total: <span className="font-mono font-bold">{area.total_readings}</span></span>
                     </div>
                   </div>
                 ))}
@@ -251,12 +240,12 @@ const Dashboard = () => {
                   <thead>
                     <tr className="border-b-2 border-zinc-200">
                       <th className="text-left py-3 px-4 text-xs uppercase tracking-[0.15em] text-zinc-500 font-medium">Timestamp</th>
-                      <th className="text-left py-3 px-4 text-xs uppercase tracking-[0.15em] text-zinc-500 font-medium">Area</th>
+                      <th className="text-left py-3 px-4 text-xs uppercase tracking-[0.15em] text-zinc-500 font-medium">Category</th>
                       <th className="text-left py-3 px-4 text-xs uppercase tracking-[0.15em] text-zinc-500 font-medium">Equipment</th>
-                      <th className="text-right py-3 px-4 text-xs uppercase tracking-[0.15em] text-zinc-500 font-medium">Current</th>
-                      <th className="text-right py-3 px-4 text-xs uppercase tracking-[0.15em] text-zinc-500 font-medium">Temperature</th>
-                      <th className="text-right py-3 px-4 text-xs uppercase tracking-[0.15em] text-zinc-500 font-medium">Vibration</th>
+                      <th className="text-left py-3 px-4 text-xs uppercase tracking-[0.15em] text-zinc-500 font-medium">Parameter</th>
+                      <th className="text-right py-3 px-4 text-xs uppercase tracking-[0.15em] text-zinc-500 font-medium">Value</th>
                       <th className="text-center py-3 px-4 text-xs uppercase tracking-[0.15em] text-zinc-500 font-medium">Status</th>
+                      <th className="text-left py-3 px-4 text-xs uppercase tracking-[0.15em] text-zinc-500 font-medium">Verified By</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -279,22 +268,14 @@ const Dashboard = () => {
                               })
                             : "—"}
                         </td>
-                        <td className="py-3 px-4 text-zinc-700">{reading.machine || "—"}</td>
-                        <td className="py-3 px-4 text-zinc-600 text-xs">{reading.motor || "—"}</td>
+                        <td className="py-3 px-4 text-zinc-700">{reading.category || "—"}</td>
+                        <td className="py-3 px-4 text-zinc-600 text-xs">{reading.equipment || "—"}</td>
+                        <td className="py-3 px-4 text-zinc-600 text-xs">{reading.parameter || "—"}</td>
                         <td className="py-3 px-4 text-right font-mono font-medium">
-                          {reading.current != null && reading.current !== "" ? <span>{reading.current} A</span> : <span className="text-zinc-400">—</span>}
-                        </td>
-                        <td className="py-3 px-4 text-right font-mono font-medium">
-                          {reading.temperature != null && reading.temperature !== "" ? <span>{reading.temperature} °C</span> : <span className="text-zinc-400">—</span>}
-                        </td>
-                        <td className="py-3 px-4 text-right font-mono text-xs">
-                          {readingVibration(reading) != null && readingVibration(reading) !== "" ? (
-                            <span>{readingVibration(reading)} mm/s</span>
-                          ) : (
-                            <span className="text-zinc-400">—</span>
-                          )}
+                          {reading.value != null && reading.value !== "" ? <span>{reading.value}</span> : <span className="text-zinc-400">—</span>}
                         </td>
                         <td className="py-3 px-4 text-center">{getStatusBadge(reading.status)}</td>
+                        <td className="py-3 px-4 text-xs text-zinc-600">{reading.verified_by || "—"}</td>
                       </tr>
                     ))}
                   </tbody>

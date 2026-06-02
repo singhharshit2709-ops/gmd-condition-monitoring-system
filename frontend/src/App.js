@@ -1,11 +1,12 @@
-import { useState } from "react";
 import "@/App.css";
 import { BrowserRouter, Routes, Route, Link, useLocation } from "react-router-dom";
 import ConditionMonitoring from "@/pages/ConditionMonitoring";
 import Dashboard from "@/pages/Dashboard";
 import BulkEntry from "@/pages/BulkEntry";
+import Reports from "@/pages/Reports";
+import TrendsAnalytics from "@/pages/TrendsAnalytics"; 
 
-import { GearSix, ChartLine, ListChecks, Brain } from "@phosphor-icons/react";
+import { GearSix, ChartLine, ListChecks } from "@phosphor-icons/react";
 
 const Navigation = () => {
   const location = useLocation();
@@ -66,14 +67,10 @@ function App() {
         <Navigation />
         <Routes>
           <Route path="/" element={<Dashboard />} />
-
-<Route path="/add-reading" element={<BulkEntry />} />
-
-<Route path="/equipment-monitoring" element={<ConditionMonitoring />} />
-
-<Route path="/reports" element={<ConditionMonitoring />} />
-
-<Route path="/trends-analytics" element={<ConditionMonitoring />} />
+          <Route path="/add-reading" element={<BulkEntry />} />
+          <Route path="/equipment-monitoring" element={<ConditionMonitoring />} />
+          <Route path="/reports" element={<Reports />} />
+          <Route path="/trends-analytics" element={<TrendsAnalytics />} /> 
         
         </Routes>
       </BrowserRouter>

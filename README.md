@@ -1,8 +1,8 @@
-# Neutral Glass — G Tank Electrical Condition Monitoring
+# Neutral Glass — General Maintenance Department Condition Monitoring System
 
 **Version 1.0.0** · Plant **GT** · 10 areas · 42 motors
 
-Electrical condition monitoring for the G Tank: current, temperature, and vibration readings with dashboard, bulk entry, alarms, and Google Sheets logging.
+General Maintenance Department condition monitoring: current, temperature, and vibration readings with dashboard, bulk entry, alarms, and Google Sheets logging.
 
 
 

@@ -1,6 +1,6 @@
 {
   "schema_version": "3.0.0",
-  "description": "Neutral Glass - G Tank Electrical Condition Monitoring",
+  "description": "Neutral Glass - General Maintenance Department Condition Monitoring System",
   "parameter_units": {
     "current": "A",
     "temperature": "C",

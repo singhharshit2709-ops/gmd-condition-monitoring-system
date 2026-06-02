@@ -191,7 +191,7 @@ const ConditionMonitoring = () => {
         <div>
           <h1 className="text-4xl font-light tracking-tight text-zinc-950">View Data</h1>
           <p className="text-sm font-medium text-zinc-800 mt-1">Neutral Glass</p>
-          <p className="text-sm text-zinc-600 mt-0.5">G Tank Electrical Condition Monitoring</p>
+          <p className="text-sm text-zinc-600 mt-0.5">General Maintenance Department Condition Monitoring System</p>
           <p className="text-sm text-zinc-700 mt-2">Current, temperature, and vibration by area</p>
         </div>
         <button
