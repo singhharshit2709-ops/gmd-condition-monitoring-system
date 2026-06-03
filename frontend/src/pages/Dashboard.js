@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import axios from "axios";
 import { GearSix, Warning } from "@phosphor-icons/react";
 import { PLANT_ID, PLANT_LABEL } from "@/lib/gtConfig";
@@ -8,39 +8,94 @@ const API = getApiBase();
 
 const Dashboard = () => {
   const [areaHealth, setAreaHealth] = useState([]);
-  const [equipmentSummary, setEquipmentSummary] = useState({ total: 0, ok: 0, warning: 0, alarm: 0 });
+  const [equipmentSummary, setEquipmentSummary] = useState(() => {
+    if (typeof window === "undefined") {
+      return null;
+    }
+
+    try {
+      const cached = window.localStorage.getItem("dashboardSummary");
+      return cached ? JSON.parse(cached) : null;
+    } catch {
+      return null;
+    }
+  });
+  const equipmentSummaryRef = useRef(equipmentSummary);
   const [activeAlarms, setActiveAlarms] = useState([]);
   const [recentReadings, setRecentReadings] = useState([]);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(() => equipmentSummary === null);
+
+  useEffect(() => {
+    equipmentSummaryRef.current = equipmentSummary;
+  }, [equipmentSummary]);
 
   useEffect(() => {
     fetchData();
-    const interval = setInterval(fetchData, 5000);
+    const interval = setInterval(fetchData, 30000);
     return () => clearInterval(interval);
   }, []);
 
-  const fetchData = async () => {
-    try {
-      const [
-  summaryResponse,
-  recentResponse,
-  alarmsResponse,
-  healthResponse
-] = await Promise.all([
-  axios.get(`${API}/dashboard/summary`),
-  axios.get(`${API}/dashboard/recent-readings`),
-  axios.get(`${API}/dashboard/active-alarms`),
-  axios.get(`${API}/dashboard/equipment-health`)
-]); 
+  const isValidSummary = (payload) => {
+    return (
+      payload &&
+      typeof payload === "object" &&
+      payload !== null &&
+      typeof payload.total === "number" &&
+      typeof payload.ok === "number" &&
+      typeof payload.warning === "number" &&
+      typeof payload.alarm === "number"
+    );
+  };
 
-      setEquipmentSummary(summaryResponse.data);
-      setAreaHealth(healthResponse.data); 
-      setActiveAlarms(alarmsResponse.data);
-      setRecentReadings(recentResponse.data);
+  const fetchData = async () => {
+    const firstLoad = equipmentSummaryRef.current === null;
+    if (firstLoad) {
+      setLoading(true);
+    }
+
+    try {
+      const [summaryResult, recentResult, alarmsResult, healthResult] = await Promise.allSettled([
+        axios.get(`${API}/dashboard/summary`),
+        axios.get(`${API}/dashboard/recent-readings`),
+        axios.get(`${API}/dashboard/active-alarms`),
+        axios.get(`${API}/dashboard/equipment-health`),
+      ]);
+
+      if (summaryResult.status === "fulfilled" && isValidSummary(summaryResult.value.data)) {
+        const summaryData = summaryResult.value.data;
+        setEquipmentSummary(summaryData);
+        if (typeof window !== "undefined") {
+          window.localStorage.setItem("dashboardSummary", JSON.stringify(summaryData));
+        }
+      } else if (summaryResult.status === "rejected") {
+        console.error("Dashboard summary fetch failed:", summaryResult.reason);
+      } else {
+        console.warn("Invalid dashboard summary payload received, preserving existing summary.", summaryResult);
+      }
+
+      if (recentResult.status === "fulfilled" && Array.isArray(recentResult.value.data)) {
+        setRecentReadings(recentResult.value.data);
+      } else if (recentResult.status === "rejected") {
+        console.error("Recent readings fetch failed:", recentResult.reason);
+      }
+
+      if (alarmsResult.status === "fulfilled" && Array.isArray(alarmsResult.value.data)) {
+        setActiveAlarms(alarmsResult.value.data);
+      } else if (alarmsResult.status === "rejected") {
+        console.error("Active alarms fetch failed:", alarmsResult.reason);
+      }
+
+      if (healthResult.status === "fulfilled" && Array.isArray(healthResult.value.data)) {
+        setAreaHealth(healthResult.value.data);
+      } else if (healthResult.status === "rejected") {
+        console.error("Equipment health fetch failed:", healthResult.reason);
+      }
     } catch (e) {
       console.error("Dashboard fetch error:", e);
     } finally {
-      setLoading(false);
+      if (firstLoad) {
+        setLoading(false);
+      }
     }
   };
 
@@ -65,7 +120,7 @@ const Dashboard = () => {
 
 
 
-  if (loading) {
+  if (loading && equipmentSummary === null) {
     return (
       <div className="w-full max-w-[1920px] mx-auto p-4 md:p-6 lg:p-8">
         <div className="text-sm text-zinc-600">Loading...</div>
@@ -161,22 +216,22 @@ const Dashboard = () => {
         <div className="col-span-1 md:col-span-12 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
           <div className="bg-white border border-zinc-200 p-6 rounded-lg">
             <p className="text-sm uppercase tracking-[0.2em] text-zinc-500 mb-2">Total equipment</p>
-            <h2 className="text-4xl font-light text-zinc-950">{equipmentSummary.total}</h2>
+            <h2 className="text-4xl font-light text-zinc-950">{equipmentSummary?.total ?? 0}</h2>
             <p className="text-sm text-zinc-500 mt-2">{PLANT_LABEL}</p>
           </div>
           <div className="bg-white border border-green-200 p-6 rounded-lg">
             <p className="text-sm uppercase tracking-[0.2em] text-green-700 mb-2">Normal</p>
-            <h2 className="text-4xl font-light text-green-700">{equipmentSummary.ok}</h2>
+            <h2 className="text-4xl font-light text-green-700">{equipmentSummary?.ok ?? 0}</h2>
             <p className="text-sm text-green-600 mt-2">Within limits</p>
           </div>
           <div className="bg-white border border-yellow-200 p-6 rounded-lg">
             <p className="text-sm uppercase tracking-[0.2em] text-yellow-700 mb-2">Warning</p>
-            <h2 className="text-4xl font-light text-yellow-700">{equipmentSummary.warning}</h2>
+            <h2 className="text-4xl font-light text-yellow-700">{equipmentSummary?.warning ?? 0}</h2>
             <p className="text-sm text-yellow-600 mt-2">Needs inspection</p>
           </div>
           <div className="bg-white border border-red-200 p-6 rounded-lg">
             <p className="text-sm uppercase tracking-[0.2em] text-red-700 mb-2">Alarm</p>
-            <h2 className="text-4xl font-light text-red-700">{equipmentSummary.alarm}</h2>
+            <h2 className="text-4xl font-light text-red-700">{equipmentSummary?.alarm ?? 0}</h2>
             <p className="text-sm text-red-600 mt-2">Immediate action</p>
           </div>
         </div>
@@ -193,7 +248,10 @@ const Dashboard = () => {
                     data-testid={`area-health-${area.equipment}`}
                   >
                     <div className="flex items-center justify-between mb-2">
-                      <h4 className="text-sm font-medium text-zinc-950 leading-tight">{area.equipment}</h4>
+                      <div>
+                        <h4 className="text-sm font-medium text-zinc-950 leading-tight">{area.equipment}</h4>
+                        <p className="text-xs text-zinc-500 mt-1">{area.last_updated || "Updated Unknown"}</p>
+                      </div>
                       <span
                         className={`text-2xl font-mono font-light ${
                           area.health_percentage >= 90 ? "text-[#16A34A]" : area.health_percentage >= 70 ? "text-yellow-700" : "text-[#E11D48]"

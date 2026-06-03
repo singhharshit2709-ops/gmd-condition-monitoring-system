@@ -17,13 +17,23 @@ const Reports = () => {
 
   useEffect(() => {
     loadReports();
-  }, []);
+  }, [categoryFilter, equipmentFilter, statusFilter, startDate, endDate]);
 
   const loadReports = async () => {
     setLoading(true);
     setError("");
     try {
-      const response = await axios.get(`${API}/reports/readings`);
+      const params = {
+        category: categoryFilter || undefined,
+        equipment: equipmentFilter || undefined,
+        status: statusFilter || undefined,
+        start_date: startDate || undefined,
+        end_date: endDate || undefined,
+      };
+
+      const response = await axios.get(`${API}/reports/readings`, {
+        params,
+      });
       setReadings(response.data || []);
     } catch (loadError) {
       console.error("Reports fetch failed:", loadError);

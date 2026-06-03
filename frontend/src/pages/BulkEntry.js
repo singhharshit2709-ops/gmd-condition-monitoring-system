@@ -3,6 +3,7 @@ import axios from "axios";
 import { Camera, XCircle, Check } from "@phosphor-icons/react";
 import { GMD_CATEGORIES, GMD_EQUIPMENT } from "@/lib/gmdConfig";
 import { getApiBase } from "@/lib/api";
+import { EQUIPMENT_CONFIG } from "@/lib/equipmentConfig"; 
 
 const API = getApiBase();
 
@@ -38,11 +39,16 @@ const formatParameterLabel = (key) => {
 const getUnit = (key) => {
   if (key.includes("vibration")) return "mm/s";
   if (key.includes("temperature") || key.includes("temp")) return "°C";
-  if (key === "ph") return "";
-  if (key === "tds" || key === "hardness") return "ppm";
   if (key.includes("pressure")) return "bar";
+
+  if (key.includes("current")) return "A";
+  if (key.includes("voltage")) return "V";
+
+  if (key === "tds" || key === "hardness") return "ppm";
+  if (key === "ph") return "pH";
+
   return "";
-};
+}; 
 
 const BulkEntry = () => {
   // Core structured GMD application tracking states
@@ -83,7 +89,7 @@ const BulkEntry = () => {
       return;
     }
 
-    const defaultFields = CATEGORY_PARAMETERS[selectedCategory] || [];
+    const defaultFields = EQUIPMENT_CONFIG[selectedEquipment]?.parameters || [];
     const initialReadings = {};
     
     defaultFields.forEach((field) => {
@@ -91,7 +97,7 @@ const BulkEntry = () => {
     });
     
     setReadings(initialReadings);
-  }, [selectedCategory]);
+  }, [selectedEquipment]); 
 
   const handlePhotoCapture = (e) => {
     const file = e.target.files[0];
@@ -155,7 +161,7 @@ const BulkEntry = () => {
 
       // FIX #2: Maintain visual form visibility. Reset values, maintain asset targets.
       const resetReadings = {};
-      (CATEGORY_PARAMETERS[selectedCategory] || []).forEach((field) => {
+      (EQUIPMENT_CONFIG[selectedEquipment]?.parameters || []).forEach((field) => {
         resetReadings[field] = "";
       });
       setReadings(resetReadings);
@@ -373,7 +379,7 @@ const BulkEntry = () => {
                 setSelectedEquipment("");
                 // Reconstruct a blank object for the parameters rather than wiping keys completely
                 const blankReadings = {};
-                (CATEGORY_PARAMETERS[selectedCategory] || []).forEach((f) => {
+                (EQUIPMENT_CONFIG[selectedEquipment]?.parameters || []).forEach((f) => { 
                   blankReadings[f] = "";
                 });
                 setReadings(blankReadings);

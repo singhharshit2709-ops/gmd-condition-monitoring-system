@@ -1536,3 +1536,12 @@ async def dashboard_spa_or_asset(spa_path: str):
     if asset.is_file():
         return FileResponse(asset)
     return _serve_dashboard_index()
+if __name__ == "__main__":
+    import uvicorn
+
+    uvicorn.run(
+        "server:app",
+        host="0.0.0.0",
+        port=8000,
+        reload=True
+    ) 
