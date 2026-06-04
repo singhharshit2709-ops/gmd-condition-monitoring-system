@@ -11,6 +11,7 @@ import {
   CartesianGrid,
   Tooltip,
   Legend,
+  Label,
 } from "recharts";
 
 const API = getApiBase();
@@ -116,6 +117,34 @@ export default function TrendsAnalytics() {
     [data]
   );
 
+  const formatTimestamp = (timestamp) => {
+    const date = new Date(timestamp);
+    if (Number.isNaN(date.getTime())) return String(timestamp || "-");
+    return new Intl.DateTimeFormat("en-US", {
+      month: "short",
+      day: "numeric",
+      hour: "2-digit",
+      minute: "2-digit",
+    }).format(date);
+  };
+
+  const tooltipLabelFormatter = (label) => `Time: ${label}`;
+  const tooltipFormatter = (value, name) => [value, name];
+
+  const lastReadingTimestamp = useMemo(() => {
+    if (!data.length) return "";
+    const latest = data.reduce((current, next) => {
+      const currentTs = new Date(current.timestamp).getTime();
+      const nextTs = new Date(next.timestamp).getTime();
+      return nextTs > currentTs ? next : current;
+    }, data[0]);
+    return formatTimestamp(latest.timestamp);
+  }, [data]);
+
+  const selectedEquipmentLabel = equipmentFilter || "All equipment";
+  const parametersAvailable = parameterOptions.length;
+  const totalHistoricalRecords = data.length;
+
   const temperatureData = useMemo(
     () => data.filter((item) => String(item.parameter).toLowerCase() === "temperature"),
     [data]
@@ -129,6 +158,24 @@ export default function TrendsAnalytics() {
       }),
     [data]
   );
+
+  const vibrationSeries = useMemo(() => {
+    const seriesMap = {};
+
+    vibrationData.forEach((item) => {
+      const key = formatTimestamp(item.timestamp);
+      if (!seriesMap[key]) {
+        seriesMap[key] = { timestamp: key, rawTimestamp: item.timestamp };
+      }
+
+      const param = String(item.parameter).toLowerCase();
+      if (param.includes("vertical")) seriesMap[key].vertical = Number(item.value);
+      if (param.includes("horizontal")) seriesMap[key].horizontal = Number(item.value);
+      if (param.includes("axial")) seriesMap[key].axial = Number(item.value);
+    });
+
+    return Object.values(seriesMap).sort((a, b) => new Date(a.rawTimestamp) - new Date(b.rawTimestamp));
+  }, [vibrationData]);
 
   return (
     <div className="w-full max-w-[1920px] mx-auto p-4 md:p-6 lg:p-8">
@@ -229,6 +276,27 @@ export default function TrendsAnalytics() {
         </div>
       </div>
 
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between mb-6">
+        <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4 w-full">
+          <div className="rounded-3xl border border-zinc-200 bg-zinc-50 p-4">
+            <p className="text-[10px] uppercase tracking-[0.2em] text-zinc-500 font-bold">Total Historical Records</p>
+            <p className="mt-3 text-2xl font-semibold text-zinc-950">{totalHistoricalRecords}</p>
+          </div>
+          <div className="rounded-3xl border border-zinc-200 bg-zinc-50 p-4">
+            <p className="text-[10px] uppercase tracking-[0.2em] text-zinc-500 font-bold">Selected Equipment</p>
+            <p className="mt-3 text-2xl font-semibold text-zinc-950">{selectedEquipmentLabel}</p>
+          </div>
+          <div className="rounded-3xl border border-zinc-200 bg-zinc-50 p-4">
+            <p className="text-[10px] uppercase tracking-[0.2em] text-zinc-500 font-bold">Parameters Available</p>
+            <p className="mt-3 text-2xl font-semibold text-zinc-950">{parametersAvailable}</p>
+          </div>
+          <div className="rounded-3xl border border-zinc-200 bg-zinc-50 p-4">
+            <p className="text-[10px] uppercase tracking-[0.2em] text-zinc-500 font-bold">Last Reading Timestamp</p>
+            <p className="mt-3 text-2xl font-semibold text-zinc-950">{lastReadingTimestamp || "No data"}</p>
+          </div>
+        </div>
+      </div>
+
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between mb-6">
         <div>
           <p className="text-sm text-zinc-600">
@@ -252,36 +320,62 @@ export default function TrendsAnalytics() {
         <>
           <div className="rounded-3xl border border-zinc-200 bg-white p-6 shadow-sm mb-8">
             <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between mb-6">
-              <h2 className="text-2xl font-medium text-zinc-900">Temperature Trend</h2>
-              <p className="text-sm text-zinc-500">Plotting all historical temperature readings in the selected window.</p>
+              <div>
+                <h2 className="text-2xl font-medium text-zinc-900">Temperature Trend</h2>
+                <p className="text-sm text-zinc-500">Plotting all historical temperature readings in the selected window.</p>
+              </div>
             </div>
-            <ResponsiveContainer width="100%" height={400}>
-              <LineChart data={temperatureData}>
-                <CartesianGrid strokeDasharray="3 3" />
-                <XAxis dataKey="timestamp" tick={{ fontSize: 12 }} />
-                <YAxis tick={{ fontSize: 12 }} />
-                <Tooltip />
-                <Legend />
-                <Line type="monotone" dataKey="value" name="Temperature" stroke="#002FA7" strokeWidth={2} dot={false} />
-              </LineChart>
-            </ResponsiveContainer>
+            {temperatureData.length === 0 ? (
+              <div className="rounded-3xl border border-zinc-200 bg-zinc-50 p-12 text-center text-sm text-zinc-600">
+                No temperature trend data is available for the selected filters. Adjust the date range or equipment selection to load the chart.
+              </div>
+            ) : (
+              <ResponsiveContainer width="100%" height={450}>
+                <LineChart data={temperatureData}>
+                  <CartesianGrid strokeDasharray="3 3" />
+                  <XAxis dataKey="timestamp" tick={{ fontSize: 12 }} tickFormatter={(tick) => formatTimestamp(tick)}>
+                    <Label value="Time" position="insideBottom" offset={-5} />
+                  </XAxis>
+                  <YAxis tick={{ fontSize: 12 }}>
+                    <Label value="Temperature (°C)" angle={-90} position="insideLeft" offset={-5} />
+                  </YAxis>
+                  <Tooltip labelFormatter={tooltipLabelFormatter} formatter={tooltipFormatter} />
+                  <Legend verticalAlign="top" height={32} />
+                  <Line type="monotone" dataKey="value" name="Temperature" stroke="#002FA7" strokeWidth={2} dot={false} />
+                </LineChart>
+              </ResponsiveContainer>
+            )}
           </div>
 
           <div className="rounded-3xl border border-zinc-200 bg-white p-6 shadow-sm">
             <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between mb-6">
-              <h2 className="text-2xl font-medium text-zinc-900">Vibration Trend</h2>
-              <p className="text-sm text-zinc-500">Plotting vertical, horizontal, and axial vibration history.</p>
+              <div>
+                <h2 className="text-2xl font-medium text-zinc-900">Vibration Trend</h2>
+                <p className="text-sm text-zinc-500">Combined vertical, horizontal, and axial vibration history for clearer fault analysis.</p>
+              </div>
             </div>
-            <ResponsiveContainer width="100%" height={400}>
-              <LineChart data={vibrationData}>
-                <CartesianGrid strokeDasharray="3 3" />
-                <XAxis dataKey="timestamp" tick={{ fontSize: 12 }} />
-                <YAxis tick={{ fontSize: 12 }} />
-                <Tooltip />
-                <Legend />
-                <Line type="monotone" dataKey="value" name="Vibration" stroke="#E11D48" strokeWidth={2} dot={false} />
-              </LineChart>
-            </ResponsiveContainer>
+            {vibrationSeries.length === 0 ? (
+              <div className="rounded-3xl border border-zinc-200 bg-zinc-50 p-12 text-center text-sm text-zinc-600">
+                No vibration trend data is available for the selected filters. Try selecting a broader date range or different equipment.
+              </div>
+            ) : (
+              <ResponsiveContainer width="100%" height={450}>
+                <LineChart data={vibrationSeries}>
+                  <CartesianGrid strokeDasharray="3 3" />
+                  <XAxis dataKey="timestamp" tick={{ fontSize: 12 }} tickFormatter={(tick) => formatTimestamp(tick)}>
+                    <Label value="Time" position="insideBottom" offset={-5} />
+                  </XAxis>
+                  <YAxis tick={{ fontSize: 12 }}>
+                    <Label value="Velocity (mm/s)" angle={-90} position="insideLeft" offset={-5} />
+                  </YAxis>
+                  <Tooltip labelFormatter={tooltipLabelFormatter} formatter={tooltipFormatter} />
+                  <Legend verticalAlign="top" height={32} />
+                  <Line type="monotone" dataKey="vertical" name="Vertical Vibration" stroke="#002FA7" strokeWidth={2} dot={false} />
+                  <Line type="monotone" dataKey="horizontal" name="Horizontal Vibration" stroke="#E11D48" strokeWidth={2} dot={false} />
+                  <Line type="monotone" dataKey="axial" name="Axial Vibration" stroke="#047857" strokeWidth={2} dot={false} />
+                </LineChart>
+              </ResponsiveContainer>
+            )}
           </div>
         </>
       )}

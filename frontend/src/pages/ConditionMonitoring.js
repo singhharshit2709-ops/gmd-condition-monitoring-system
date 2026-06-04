@@ -23,6 +23,55 @@ const STANDARD_PARAMETERS = [
   "Pressure",
 ];
 
+const normalizeParameterKey = (parameter) =>
+  String(parameter || "")
+    .trim()
+    .toLowerCase()
+    .replace(/_/g, " ")
+    .replace(/\s+/g, " ");
+
+const PARAMETER_LABELS = {
+  "vertical vibration": "Vertical Vibration",
+  "horizontal vibration": "Horizontal Vibration",
+  "axial vibration": "Axial Vibration",
+  temperature: "Temperature",
+  current: "Current",
+  voltage: "Voltage",
+  pressure: "Pressure",
+};
+
+const formatParameterLabel = (parameter) => {
+  const key = normalizeParameterKey(parameter);
+  return PARAMETER_LABELS[key] ||
+    key
+      .split(" ")
+      .filter(Boolean)
+      .map((word) => word[0].toUpperCase() + word.slice(1))
+      .join(" ");
+};
+
+const formatParameterDisplayValue = (parameter, value) => {
+  if (value === null || value === undefined || String(value).trim() === "") {
+    return "N/A";
+  }
+
+  const parsed = Number(String(value).trim());
+  const key = normalizeParameterKey(parameter);
+
+  const suffix =
+    key === "temperature"
+      ? " °C"
+      : key === "current"
+      ? " A"
+      : key === "voltage"
+      ? " V"
+      : "";
+
+  return Number.isNaN(parsed) ? String(value) : `${parsed}${suffix}`;
+};
+
+const STANDARD_PARAMETER_KEYS = STANDARD_PARAMETERS.map(normalizeParameterKey);
+
 const formatTimestamp = (value) => {
   if (!value) {
     return "—";
@@ -49,6 +98,9 @@ const ConditionMonitoring = () => {
   const [selectedParameter, setSelectedParameter] = useState("Temperature");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+
+  const dataSourceLabel = "Google Sheets";
+  const dataSourceStatus = "Connected";
 
   useEffect(() => {
     loadReadings();
@@ -93,19 +145,23 @@ const ConditionMonitoring = () => {
       (row) => row.equipment === selectedEquipment
     );
 
-    const available = Array.from(
-      new Set(
-        equipmentRows
-          .map((row) => String(row.parameter || "").trim())
-          .filter(Boolean)
-      )
-    );
+    const parameterKeys = new Map();
+    for (const row of equipmentRows) {
+      const key = normalizeParameterKey(row.parameter);
+      if (!key) continue;
+      parameterKeys.set(key, row.parameter);
+    }
 
-    const sortedStandard = STANDARD_PARAMETERS.filter((param) =>
-      available.includes(param)
+    const standard = STANDARD_PARAMETER_KEYS.filter((key) => parameterKeys.has(key));
+    const others = Array.from(parameterKeys.keys()).filter(
+      (key) => !STANDARD_PARAMETER_KEYS.includes(key)
     );
-    const others = available.filter((param) => !STANDARD_PARAMETERS.includes(param));
-    return [...sortedStandard, ...others];
+    others.sort();
+
+    return [
+      ...standard.map((key) => formatParameterLabel(key)),
+      ...others.map((key) => formatParameterLabel(key)),
+    ];
   }, [readings, selectedEquipment]);
 
   useEffect(() => {
@@ -129,11 +185,62 @@ const ConditionMonitoring = () => {
     [readings, selectedEquipment]
   );
 
-  const latestReadings = useMemo(() => equipmentRows.slice(0, 15), [equipmentRows]);
+  const latestTimestamp = useMemo(() => equipmentRows[0]?.timestamp || null, [equipmentRows]);
+
+  const latestReadingsByParameter = useMemo(() => {
+    if (!latestTimestamp) {
+      return [];
+    }
+
+    const latestRows = equipmentRows.filter((row) => row.timestamp === latestTimestamp);
+    const uniqueLatest = new Map();
+
+    for (const row of latestRows) {
+      const key = normalizeParameterKey(row.parameter);
+      if (!key || uniqueLatest.has(key)) {
+        continue;
+      }
+
+      uniqueLatest.set(key, row);
+    }
+
+    const standard = STANDARD_PARAMETER_KEYS.filter((key) => uniqueLatest.has(key));
+    const others = Array.from(uniqueLatest.keys()).filter(
+      (key) => !STANDARD_PARAMETER_KEYS.includes(key)
+    );
+    others.sort();
+
+    return [...standard, ...others].map((key) => uniqueLatest.get(key));
+  }, [equipmentRows, latestTimestamp]);
+
+  const equipmentSummary = useMemo(() => {
+    const latestRow = equipmentRows[0] || {};
+    return {
+      name: selectedEquipment || "—",
+      category: latestRow.category || "—",
+      parametersMonitoredCount: parameterOptions.length,
+      historicalRecordsCount: equipmentRows.length,
+      latestReadingTimestamp: formatTimestamp(latestTimestamp),
+      lastVerifiedBy: latestRow.verified_by || "—",
+    };
+  }, [equipmentRows, parameterOptions.length, selectedEquipment, latestTimestamp]);
+
+  const totalEquipments = equipmentList.length;
+  const totalParameters = parameterOptions.length;
+  const historicalRecords = equipmentRows.length;
+  const lastUpdatedText = latestTimestamp ? formatTimestamp(latestTimestamp) : "—";
+
+  const equipmentCountLabel = `${totalEquipments} Active Equipment`;
+  const parameterCountLabel = `${totalParameters} Parameters`;
+  const historicalRecordsLabel = `${historicalRecords} Readings`;
 
   const chartData = useMemo(() => {
     return equipmentRows
-      .filter((row) => row.parameter === selectedParameter)
+      .filter(
+        (row) =>
+          normalizeParameterKey(row.parameter) ===
+          normalizeParameterKey(selectedParameter)
+      )
       .map((row) => {
         const value = Number(row.value);
         if (Number.isNaN(value)) {
@@ -167,6 +274,33 @@ const ConditionMonitoring = () => {
         >
           Refresh
         </button>
+      </div>
+
+      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-5 mb-6">
+        <div className="rounded-none border border-zinc-200 bg-white px-5 py-4">
+          <p className="text-[10px] uppercase tracking-[0.2em] text-zinc-500 font-bold">Equipment Count</p>
+          <p className="mt-3 text-3xl font-semibold text-zinc-950">{equipmentCountLabel}</p>
+        </div>
+        <div className="rounded-none border border-zinc-200 bg-white px-5 py-4">
+          <p className="text-[10px] uppercase tracking-[0.2em] text-zinc-500 font-bold">Parameters Monitored</p>
+          <p className="mt-3 text-3xl font-semibold text-zinc-950">{parameterCountLabel}</p>
+        </div>
+        <div className="rounded-none border border-zinc-200 bg-white px-5 py-4">
+          <p className="text-[10px] uppercase tracking-[0.2em] text-zinc-500 font-bold">Historical Records</p>
+          <p className="mt-3 text-3xl font-semibold text-zinc-950">{historicalRecordsLabel}</p>
+        </div>
+        <div className="rounded-none border border-zinc-200 bg-white px-5 py-4">
+          <p className="text-[10px] uppercase tracking-[0.2em] text-zinc-500 font-bold">Latest Update</p>
+          <p className="mt-3 text-3xl font-semibold text-zinc-950">{lastUpdatedText}</p>
+        </div>
+        <div className="rounded-none border border-zinc-200 bg-white px-5 py-4">
+          <p className="text-[10px] uppercase tracking-[0.2em] text-zinc-500 font-bold">Data Source</p>
+          <p className="mt-3 text-sm font-medium text-zinc-950">{dataSourceLabel}</p>
+          <p className="mt-1 inline-flex items-center gap-2 text-xs uppercase tracking-[0.2em] text-emerald-700 font-semibold">
+            <span className="h-2.5 w-2.5 rounded-full bg-emerald-500 shadow-sm"></span>
+            {dataSourceStatus}
+          </p>
+        </div>
       </div>
 
       {error ? (
@@ -225,13 +359,68 @@ const ConditionMonitoring = () => {
             <div className="mb-6 flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
               <div>
                 <h2 className="text-lg font-medium text-zinc-900">
-                  {selectedEquipment ? `${selectedEquipment} — ${selectedParameter} trend` : "Select equipment to view readings"}
+                  {selectedEquipment
+                    ? `${selectedEquipment} — Historical ${selectedParameter} Trend`
+                    : "Select equipment to view readings"}
                 </h2>
                 {selectedEquipment && (
                   <p className="text-sm text-zinc-600 mt-1">{equipmentRows.length} readings available.</p>
                 )}
               </div>
             </div>
+
+            {selectedEquipment && !loading && (
+              <div className="rounded-none border border-zinc-200 bg-white p-6 mb-6">
+                <div className="flex items-center justify-between mb-4">
+                  <h3 className="text-sm font-medium text-zinc-900">Latest Reading Snapshot</h3>
+                  <p className="text-xs text-zinc-500">As of {equipmentSummary.latestReadingTimestamp}</p>
+                </div>
+                <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+                  {latestReadingsByParameter.length === 0 ? (
+                    <div className="col-span-full text-sm text-zinc-500">No latest snapshot data available.</div>
+                  ) : (
+                    latestReadingsByParameter.map((row) => (
+                      <div key={normalizeParameterKey(row.parameter)} className="rounded-none border border-zinc-200 bg-zinc-50 p-4">
+                        <p className="text-xs uppercase tracking-[0.2em] text-zinc-500 font-bold">{formatParameterLabel(row.parameter)}</p>
+                        <p className="mt-3 text-2xl font-semibold text-zinc-950">{formatParameterDisplayValue(row.parameter, row.value)}</p>
+                      </div>
+                    ))
+                  )}
+                </div>
+              </div>
+            )}
+
+            {selectedEquipment && !loading && (
+              <div className="rounded-none border border-zinc-200 bg-white p-5 mb-6">
+                <h3 className="text-sm font-medium text-zinc-900 mb-4">Equipment Summary</h3>
+                <dl className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+                  <div className="space-y-1">
+                    <dt className="text-[10px] uppercase tracking-[0.2em] text-zinc-500 font-bold">Equipment Name</dt>
+                    <dd className="text-sm text-zinc-900 font-medium">{equipmentSummary.name}</dd>
+                  </div>
+                  <div className="space-y-1">
+                    <dt className="text-[10px] uppercase tracking-[0.2em] text-zinc-500 font-bold">Category</dt>
+                    <dd className="text-sm text-zinc-900 font-medium">{equipmentSummary.category}</dd>
+                  </div>
+                  <div className="space-y-1">
+                    <dt className="text-[10px] uppercase tracking-[0.2em] text-zinc-500 font-bold">Parameters Monitored</dt>
+                    <dd className="text-sm text-zinc-900 font-medium">{equipmentSummary.parametersMonitoredCount} Parameters</dd>
+                  </div>
+                  <div className="space-y-1">
+                    <dt className="text-[10px] uppercase tracking-[0.2em] text-zinc-500 font-bold">Historical Records Count</dt>
+                    <dd className="text-sm text-zinc-900 font-medium">{equipmentSummary.historicalRecordsCount}</dd>
+                  </div>
+                  <div className="space-y-1">
+                    <dt className="text-[10px] uppercase tracking-[0.2em] text-zinc-500 font-bold">Latest Reading Timestamp</dt>
+                    <dd className="text-sm text-zinc-900 font-medium">{equipmentSummary.latestReadingTimestamp}</dd>
+                  </div>
+                  <div className="space-y-1">
+                    <dt className="text-[10px] uppercase tracking-[0.2em] text-zinc-500 font-bold">Last Verified By</dt>
+                    <dd className="text-sm text-zinc-900 font-medium">{equipmentSummary.lastVerifiedBy}</dd>
+                  </div>
+                </dl>
+              </div>
+            )}
 
             {!selectedEquipment ? (
               <div className="h-96 flex items-center justify-center">
@@ -247,7 +436,7 @@ const ConditionMonitoring = () => {
               </div>
             ) : (
               <div data-testid="chart-container">
-                <ResponsiveContainer width="100%" height={400}>
+                <ResponsiveContainer width="100%" height={450}>
                   <LineChart data={chartData}>
                     <CartesianGrid strokeDasharray="3 3" stroke="#e4e4e7" />
                     <XAxis dataKey="time" tick={{ fontSize: 12, fill: "#71717a" }} stroke="#a1a1aa" />
@@ -267,33 +456,37 @@ const ConditionMonitoring = () => {
                   <table className="w-full">
                     <thead>
                       <tr className="border-b border-zinc-200">
-                        <th className="text-left px-4 py-2 text-[10px] sm:text-xs uppercase tracking-[0.2em] font-bold text-zinc-500">Timestamp</th>
                         <th className="text-left px-4 py-2 text-[10px] sm:text-xs uppercase tracking-[0.2em] font-bold text-zinc-500">Parameter</th>
                         <th className="text-right px-4 py-2 text-[10px] sm:text-xs uppercase tracking-[0.2em] font-bold text-zinc-500">Value</th>
                         <th className="text-left px-4 py-2 text-[10px] sm:text-xs uppercase tracking-[0.2em] font-bold text-zinc-500">Status</th>
-                        <th className="text-left px-4 py-2 text-[10px] sm:text-xs uppercase tracking-[0.2em] font-bold text-zinc-500">Verified By</th>
+                        <th className="text-left px-4 py-2 text-[10px] sm:text-xs uppercase tracking-[0.2em] font-bold text-zinc-500">Timestamp</th>
                       </tr>
                     </thead>
                     <tbody>
-                      {latestReadings.map((row, idx) => (
-                        <tr key={idx} className="even:bg-zinc-50/50 border-b border-zinc-100">
-                          <td className="px-4 py-2 text-sm text-zinc-700 whitespace-nowrap">{formatTimestamp(row.timestamp)}</td>
-                          <td className="px-4 py-2 text-sm text-zinc-700">{row.parameter || "—"}</td>
-                          <td className="px-4 py-2 text-sm font-mono text-zinc-950 text-right">{row.value ?? "—"}</td>
-                          <td className="px-4 py-2">
-                            <span className={`px-2 py-1 text-xs font-bold uppercase tracking-wider rounded-none ${
-                              row.status?.toLowerCase() === "alarm"
-                                ? "bg-red-50 text-red-700"
-                                : row.status?.toLowerCase() === "warning"
-                                ? "bg-yellow-50 text-yellow-800"
-                                : "bg-emerald-50 text-emerald-700"
-                            }`}>
-                              {row.status || "Unknown"}
-                            </span>
-                          </td>
-                          <td className="px-4 py-2 text-sm text-zinc-700">{row.verified_by || "—"}</td>
+                      {latestReadingsByParameter.length === 0 ? (
+                        <tr>
+                          <td colSpan={4} className="px-4 py-4 text-sm text-zinc-500 text-center">No latest readings available for selected equipment.</td>
                         </tr>
-                      ))}
+                      ) : (
+                        latestReadingsByParameter.map((row, idx) => (
+                          <tr key={idx} className="even:bg-zinc-50/50 border-b border-zinc-100">
+                            <td className="px-4 py-2 text-sm text-zinc-700">{formatParameterLabel(row.parameter)}</td>
+                            <td className="px-4 py-2 text-sm font-mono text-zinc-950 text-right">{formatParameterDisplayValue(row.parameter, row.value)}</td>
+                            <td className="px-4 py-2">
+                              <span className={`px-2 py-1 text-xs font-bold uppercase tracking-wider rounded-none ${
+                                row.status?.toLowerCase() === "alarm"
+                                  ? "bg-red-50 text-red-700"
+                                  : row.status?.toLowerCase() === "warning"
+                                  ? "bg-yellow-50 text-yellow-800"
+                                  : "bg-emerald-50 text-emerald-700"
+                              }`}>
+                                {row.status || "Unknown"}
+                              </span>
+                            </td>
+                            <td className="px-4 py-2 text-sm text-zinc-700 whitespace-nowrap">{formatTimestamp(row.timestamp)}</td>
+                          </tr>
+                        ))
+                      )}
                     </tbody>
                   </table>
                 </div>
