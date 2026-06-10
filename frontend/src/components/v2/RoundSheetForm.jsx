@@ -9,8 +9,8 @@ import {
   getMissingRequiredReadings,
   isReadingComplete,
   sortByDisplayOrder,
-  validateRequiredReadings,
 } from "@/lib/gmdConfigV2";
+import { formatV2PreviewError, validateV2Preview } from "@/lib/v2PreviewApi";
 
 function ParameterInput({ param, value, onChange, showRequiredHighlight }) {
   const isEmptyRequired = param.required && !isReadingComplete(value);
@@ -203,7 +203,14 @@ function SummaryStat({ label, value }) {
   );
 }
 
-function PreviewModal({ open, onClose, payload, validationError, missingRows }) {
+function PreviewModal({
+  open,
+  onClose,
+  payload,
+  loading,
+  networkError,
+  apiResult,
+}) {
   if (!open) return null;
 
   return (
@@ -221,32 +228,97 @@ function PreviewModal({ open, onClose, payload, validationError, missingRows }) 
           <button
             type="button"
             onClick={onClose}
-            className="text-sm uppercase tracking-[0.15em] text-zinc-600 hover:text-zinc-950"
+            disabled={loading}
+            className="text-sm uppercase tracking-[0.15em] text-zinc-600 hover:text-zinc-950 disabled:opacity-50"
           >
             Close
           </button>
         </div>
         <div className="overflow-y-auto p-6 space-y-4">
-          {validationError ? (
-            <div className="border-2 border-[#E11D48] bg-red-50 p-4 text-sm text-red-800">
-              <p className="font-medium mb-2">{validationError}</p>
-              {missingRows.length > 0 && (
-                <ul className="list-disc list-inside space-y-1">
-                  {missingRows.map(({ param }) => (
-                    <li key={param.key}>{param.display_full_label}</li>
-                  ))}
-                </ul>
-              )}
-            </div>
-          ) : (
-            <div className="border-2 border-[#16A34A] bg-green-50 p-4 text-sm text-green-800">
-              All required readings are complete. Payload is ready for review (not saved).
+          {loading && (
+            <div
+              className="border border-zinc-200 bg-zinc-50 p-4 text-sm text-zinc-700 flex items-center gap-3"
+              data-testid="v2-preview-loading"
+            >
+              <span className="inline-block h-4 w-4 border-2 border-[#002FA7] border-t-transparent rounded-full animate-spin" />
+              Validating submission with server…
             </div>
           )}
+
+          {!loading && networkError && (
+            <div
+              className="border-2 border-[#E11D48] bg-red-50 p-4 text-sm text-red-800"
+              data-testid="v2-preview-network-error"
+            >
+              <p className="font-medium">{networkError}</p>
+            </div>
+          )}
+
+          {!loading && !networkError && apiResult?.success && (
+            <div
+              className="border-2 border-[#16A34A] bg-green-50 p-4 text-sm text-green-800 space-y-2"
+              data-testid="v2-preview-success"
+            >
+              <p className="font-medium">{apiResult.validation_message}</p>
+              <p className="font-mono text-xs">
+                Received {apiResult.received_readings} of {apiResult.expected_readings} expected
+                readings.
+              </p>
+            </div>
+          )}
+
+          {!loading && !networkError && apiResult && !apiResult.success && (
+            <div
+              className="border-2 border-[#E11D48] bg-red-50 p-4 text-sm text-red-800 space-y-3"
+              data-testid="v2-preview-validation-error"
+            >
+              <p className="font-medium">{apiResult.validation_message}</p>
+              {apiResult.missing_parameters?.length > 0 && (
+                <div>
+                  <p className="text-xs uppercase tracking-[0.15em] font-bold mb-1">
+                    Missing parameters
+                  </p>
+                  <ul className="list-disc list-inside space-y-1">
+                    {apiResult.missing_parameters.map((item) => (
+                      <li key={item.key}>
+                        {item.display_full_label || item.key}
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+              {apiResult.invalid_parameters?.length > 0 && (
+                <div>
+                  <p className="text-xs uppercase tracking-[0.15em] font-bold mb-1">
+                    Invalid parameters
+                  </p>
+                  <ul className="list-disc list-inside space-y-1">
+                    {apiResult.invalid_parameters.map((item) => (
+                      <li key={item.key}>
+                        <span className="font-mono">{item.key}</span>
+                        {" — "}
+                        {item.reason}
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+              <p className="font-mono text-xs text-red-700">
+                Received {apiResult.received_readings} of {apiResult.expected_readings} expected
+                readings.
+              </p>
+            </div>
+          )}
+
           {payload && (
-            <pre className="text-xs font-mono bg-zinc-50 border border-zinc-200 p-4 overflow-x-auto whitespace-pre-wrap">
-              {JSON.stringify(payload, null, 2)}
-            </pre>
+            <details className="text-xs">
+              <summary className="cursor-pointer text-zinc-600 uppercase tracking-[0.15em] font-bold mb-2">
+                Debug payload (local)
+              </summary>
+              <pre className="font-mono bg-zinc-50 border border-zinc-200 p-4 overflow-x-auto whitespace-pre-wrap">
+                {JSON.stringify(payload, null, 2)}
+              </pre>
+            </details>
           )}
         </div>
       </div>
@@ -272,8 +344,9 @@ export default function RoundSheetForm({
   const [showRequiredHighlight, setShowRequiredHighlight] = useState(true);
   const [previewOpen, setPreviewOpen] = useState(false);
   const [previewPayload, setPreviewPayload] = useState(null);
-  const [previewError, setPreviewError] = useState(null);
-  const [previewMissing, setPreviewMissing] = useState([]);
+  const [previewLoading, setPreviewLoading] = useState(false);
+  const [previewNetworkError, setPreviewNetworkError] = useState(null);
+  const [previewApiResult, setPreviewApiResult] = useState(null);
 
   const expectedCount = getExpectedReadingCount(equipment, renderableRows);
   const completedCount = countCompletedReadings(readings, renderableRows);
@@ -295,12 +368,12 @@ export default function RoundSheetForm({
     setReadings(buildInitialReadings(renderableRows));
     setPreviewOpen(false);
     setPreviewPayload(null);
-    setPreviewError(null);
-    setPreviewMissing([]);
+    setPreviewLoading(false);
+    setPreviewNetworkError(null);
+    setPreviewApiResult(null);
   };
 
-  const handlePreview = () => {
-    const { valid, missing } = validateRequiredReadings(readings, renderableRows);
+  const handlePreview = async () => {
     const payload = buildV2PreviewPayload({
       category,
       equipment,
@@ -312,18 +385,24 @@ export default function RoundSheetForm({
 
     console.log("[V2 Preview] Payload:", payload);
 
-    if (!valid) {
-      setPreviewError(`${missing.length} required reading(s) missing.`);
-      setPreviewMissing(missing);
-      setPreviewPayload(payload);
-      setPreviewOpen(true);
-      return;
-    }
-
-    setPreviewError(null);
-    setPreviewMissing([]);
-    setPreviewPayload(payload);
     setPreviewOpen(true);
+    setPreviewPayload(payload);
+    setPreviewLoading(true);
+    setPreviewNetworkError(null);
+    setPreviewApiResult(null);
+
+    try {
+      const result = await validateV2Preview({
+        category: payload.category,
+        equipment: payload.equipment,
+        readings: payload.readings,
+      });
+      setPreviewApiResult(result);
+    } catch (error) {
+      setPreviewNetworkError(formatV2PreviewError(error));
+    } finally {
+      setPreviewLoading(false);
+    }
   };
 
   return (
@@ -390,10 +469,11 @@ export default function RoundSheetForm({
         <button
           type="button"
           onClick={handlePreview}
-          className="px-5 py-2 bg-[#002FA7] text-white text-sm font-medium uppercase tracking-[0.1em] hover:bg-[#002FA7]/90"
+          disabled={previewLoading}
+          className="px-5 py-2 bg-[#002FA7] text-white text-sm font-medium uppercase tracking-[0.1em] hover:bg-[#002FA7]/90 disabled:opacity-60 disabled:cursor-not-allowed"
           data-testid="v2-preview-button"
         >
-          Preview
+          {previewLoading ? "Validating…" : "Preview"}
         </button>
         <button
           type="button"
@@ -417,8 +497,8 @@ export default function RoundSheetForm({
 
       <div className="border border-zinc-200 bg-zinc-50 p-4 text-sm text-zinc-600">
         <p>
-          V2 pilot — configuration-driven preview. Data is not saved. Use Preview to validate and
-          inspect the payload object.
+          V2 pilot — configuration-driven preview. Data is not saved. Preview validates against
+          POST /api/v2/preview (no persistence).
         </p>
         <label className="flex items-center gap-2 mt-3 text-xs text-zinc-700 cursor-pointer">
           <input
@@ -435,8 +515,9 @@ export default function RoundSheetForm({
         open={previewOpen}
         onClose={() => setPreviewOpen(false)}
         payload={previewPayload}
-        validationError={previewError}
-        missingRows={previewMissing}
+        loading={previewLoading}
+        networkError={previewNetworkError}
+        apiResult={previewApiResult}
       />
     </div>
   );

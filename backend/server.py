@@ -34,6 +34,7 @@ from routes.gmd_monitoring import router as gmd_router
 from routes.dashboard import router as dashboard_router 
 from routes.reports import router as reports_router
 from routes.trends import router as trends_router
+from routes.v2_preview import router as v2_preview_router
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, JSONResponse
@@ -962,6 +963,7 @@ app.include_router(gmd_router)
 app.include_router(dashboard_router)
 app.include_router(reports_router)
 app.include_router(trends_router) 
+app.include_router(v2_preview_router)
 
 app.add_middleware(
     CORSMiddleware,
