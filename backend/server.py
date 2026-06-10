@@ -44,6 +44,15 @@ from config_resolve import (
     resolve_machine_id,
     resolve_motor_name,
 )
+from services.sheets_config import (
+    GMD_SHEET_HEADERS,
+    get_spreadsheet_id,
+    get_worksheet_name,
+    is_sheets_enabled,
+    load_service_account_credentials,
+    open_spreadsheet,
+    sheets_config_summary,
+)
 
 # Load environment variables early
 load_dotenv()
@@ -552,19 +561,14 @@ def hydrate_readings_cache_from_sheets(recent_tail: int = _RECENT_HISTORY_TAIL) 
 
 def init_google_sheets() -> None:
     """
-    Initialise the Google Sheets connection at startup.
-    Supports two authentication methods:
-    1. GOOGLE_SERVICE_ACCOUNT_JSON (Priority 1) - JSON string in env var
-    2. GOOGLE_SERVICE_ACCOUNT_FILE (Priority 2, fallback) - File path to service account
+    Initialise the Google Sheets connection at startup (legacy GT compatibility layer).
+    Uses the same env vars as the GMD Dashboard — see services/sheets_config.py.
     """
     global _sheets_enabled, _sheets_worksheet
 
     logger.info("Google Sheets init starting...")
 
-    google_sheets_enabled = os.environ.get("GOOGLE_SHEETS_ENABLED", "false").lower() == "true"
-    logger.info("GOOGLE_SHEETS_ENABLED=%s", google_sheets_enabled)
-
-    if not google_sheets_enabled:
+    if not is_sheets_enabled():
         logger.info("Google Sheets disabled (GOOGLE_SHEETS_ENABLED != true)")
         return
 
@@ -575,92 +579,27 @@ def init_google_sheets() -> None:
         )
         return
 
-    sheet_id = os.environ.get("GOOGLE_SHEET_ID", "").strip()
+    sheet_id = get_spreadsheet_id()
     logger.info("GOOGLE_SHEET_ID=%r", sheet_id)
 
     if not sheet_id:
         logger.warning("Google Sheets disabled — GOOGLE_SHEET_ID is not set")
         return
 
-    # Priority 1: Check for GOOGLE_SERVICE_ACCOUNT_JSON env var
-    service_account_json = os.environ.get(
-        "GOOGLE_SERVICE_ACCOUNT_JSON",
-        ""
-    ).strip()
-
-    creds = None
-    credential_source = None
-
-    if service_account_json:
-        try:
-            creds_dict = json.loads(service_account_json)
-            creds = GServiceCredentials.from_service_account_info(
-                creds_dict,
-                scopes=[
-                    "https://www.googleapis.com/auth/spreadsheets",
-                    "https://www.googleapis.com/auth/drive"
-                ]
-            )
-            credential_source = "GOOGLE_SERVICE_ACCOUNT_JSON env var"
-            logger.info("Credential source: %s", credential_source)
-        except json.JSONDecodeError as exc:
-            logger.error(
-                "GOOGLE_SERVICE_ACCOUNT_JSON is invalid JSON, falling back to file-based auth: %s",
-                exc
-            )
-        except Exception as exc:
-            logger.error(
-                "Failed to create credentials from GOOGLE_SERVICE_ACCOUNT_JSON, falling back to file-based auth: %s",
-                exc
-            )
-
-    # Priority 2: Fallback to GOOGLE_SERVICE_ACCOUNT_FILE
-    if creds is None:
-        service_account_file = os.environ.get(
-            "GOOGLE_SERVICE_ACCOUNT_FILE",
-            "ecm-project-497106-afa1bd2f0801.json"
-        ).strip()
-
-        # Verify and resolve relative paths correctly relative to server.py location
-        file_path = Path(service_account_file)
-        if not file_path.is_absolute() and not file_path.exists():
-            resolved_path = Path(__file__).parent / file_path.name
-            if resolved_path.exists():
-                service_account_file = str(resolved_path)
-                logger.info("Resolved service account file to absolute path: %s", service_account_file)
-
-        if not os.path.exists(service_account_file):
-            logger.warning(
-                "Google Sheets disabled — service account file not found: %s",
-                service_account_file,
-            )
-            return
-
-        logger.info("Credential source: GOOGLE_SERVICE_ACCOUNT_FILE (%s)", service_account_file)
-
-        try:
-            creds = GServiceCredentials.from_service_account_file(
-                service_account_file,
-                scopes=[
-                    "https://www.googleapis.com/auth/spreadsheets",
-                    "https://www.googleapis.com/auth/drive",
-                ]
-            )
-            credential_source = "GOOGLE_SERVICE_ACCOUNT_FILE"
-        except Exception as exc:
-            logger.error("Google Sheets disabled — failed to load credentials from file: %s", exc)
-            return
-
-    # Authenticate and initialize Google Sheets
     try:
-        client      = gspread.authorize(creds)
-        logger.info("Authentication successful")
-        
-        spreadsheet = client.open_by_key(sheet_id)
+        creds, credential_source = load_service_account_credentials()
+    except RuntimeError as exc:
+        logger.warning("Google Sheets disabled — %s", exc)
+        return
+
+    try:
+        client = gspread.authorize(creds)
+        logger.info("Authentication successful (source: %s)", credential_source)
+
+        spreadsheet = open_spreadsheet(client, sheet_id)
         logger.info("Spreadsheet opened successfully")
 
-        worksheet_title = os.environ.get("GOOGLE_SHEET_WORKSHEET", "Readings").strip() or "Readings"
-        # Get or create the Readings worksheet
+        worksheet_title = get_worksheet_name()
         try:
             worksheet = spreadsheet.worksheet(worksheet_title)
         except gspread.exceptions.WorksheetNotFound:
@@ -674,8 +613,25 @@ def init_google_sheets() -> None:
             )
             logger.info("Google Sheets — created %r worksheet with headers", worksheet_title)
 
+        row1 = worksheet.row_values(1)
+        gmd_header = [str(cell).strip() for cell in row1[: len(GMD_SHEET_HEADERS)]]
+        if gmd_header == GMD_SHEET_HEADERS:
+            _sheets_worksheet = worksheet
+            _sheets_enabled = True
+            logger.info(
+                "Worksheet %r uses GMD 10-column layout — skipping GT header repair",
+                worksheet_title,
+            )
+            logger.info(
+                "Google Sheets ready (sheet_id=%s, worksheet=%r, credential_source=%s, mode=gmd)",
+                sheet_id,
+                worksheet_title,
+                credential_source,
+            )
+            return
+
         _sheets_worksheet = worksheet
-        _sheets_enabled   = True
+        _sheets_enabled = True
 
         _ensure_canonical_header_row(worksheet)
         removed_dupes = _remove_duplicate_header_rows(worksheet)
@@ -1479,6 +1435,7 @@ async def health_check() -> dict[str, Any]:
         "status": "ok",
         "version": app.version,
         "sheets_enabled": str(_sheets_enabled),
+        "sheets_config": sheets_config_summary(),
         "dashboard_ready": str(ui["dashboard_ready"]),
         "static_dir": ui["static_dir"],
         "static_dir_exists": str(ui["static_dir_exists"]),

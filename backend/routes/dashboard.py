@@ -1,12 +1,14 @@
+import hashlib
 import logging
 import os
 from datetime import datetime, timedelta
 from functools import lru_cache
-from typing import Dict, List, Any, Optional
+from typing import Dict, List, Any, Optional, Set
 
 from fastapi import APIRouter, HTTPException, Depends, Query
 from gspread.exceptions import APIError
 
+from gmd_config import get_total_equipment_count
 from services.google_sheets_service import GMDGoogleSheetsService
 
 logger = logging.getLogger("gmd_condition_monitoring.dashboard")
@@ -33,8 +35,16 @@ COL_VERIFIED_BY = 7
 COL_REMARKS = 8
 COL_ENTRY_SOURCE = 9
 
-# Fixed configured equipment count for dashboard summary
-TOTAL_EQUIPMENT = 25
+STATUS_NORMAL = "NORMAL"
+STATUS_WARNING = "WARNING"
+STATUS_ALARM = "ALARM"
+
+_STATUS_RANK = {
+    STATUS_NORMAL: 0,
+    STATUS_WARNING: 1,
+    STATUS_ALARM: 2,
+}
+
 CACHE_TTL_SECONDS = int(os.getenv("DASHBOARD_CACHE_TTL_SECONDS", "45"))
 CACHE_TTL_SECONDS = max(30, min(CACHE_TTL_SECONDS, 60))
 
@@ -43,6 +53,8 @@ _dashboard_cache = {
     "active_alarms": {"data": None, "expires_at": datetime.min},
     "equipment_health": {"data": None, "expires_at": datetime.min},
 }
+
+_acknowledged_alarm_ids: Set[str] = set()
 
 
 def _cache_valid(key: str) -> bool:
@@ -53,6 +65,32 @@ def _cache_valid(key: str) -> bool:
 def _cache_store(key: str, payload: Any) -> None:
     _dashboard_cache[key]["data"] = payload
     _dashboard_cache[key]["expires_at"] = datetime.now() + timedelta(seconds=CACHE_TTL_SECONDS)
+
+
+def _cache_invalidate(key: str) -> None:
+    _dashboard_cache[key]["data"] = None
+    _dashboard_cache[key]["expires_at"] = datetime.min
+
+
+def _configured_equipment_total() -> int:
+    try:
+        return get_total_equipment_count()
+    except Exception as exc:
+        logger.warning("Failed to load equipment count from gmd_machine_config.json: %s", exc)
+        return 0
+
+
+def _alarm_id(record: Dict[str, Any]) -> str:
+    """Stable identifier for a specific alarm event (used by acknowledge flow)."""
+    key = "|".join(
+        [
+            record.get("equipment", ""),
+            record.get("parameter", ""),
+            record.get("timestamp", ""),
+            record.get("status", ""),
+        ]
+    )
+    return hashlib.sha256(key.encode("utf-8")).hexdigest()[:16]
 
 
 def _cache_get(key: str) -> Any:
@@ -176,20 +214,37 @@ def parse_row(row: List[str]) -> Dict[str, Any]:
     }
 
 
-def get_latest_equipment_rows(rows: List[List[str]]) -> Dict[str, Dict[str, Any]]:
-    latest_equipment: Dict[str, Dict[str, Any]] = {}
+def normalize_status(status: Any) -> str:
+    normalized = str(status or STATUS_NORMAL).strip().upper()
+    if normalized in _STATUS_RANK:
+        return normalized
+    return STATUS_NORMAL
+
+
+def worst_status(*statuses: str) -> str:
+    if not statuses:
+        return STATUS_NORMAL
+    return max((normalize_status(status) for status in statuses), key=lambda s: _STATUS_RANK[s])
+
+
+def get_latest_parameter_rows(rows: List[List[str]]) -> Dict[str, Dict[str, Dict[str, Any]]]:
+    """Return the newest sheet row for each (equipment, parameter) pair."""
+    latest: Dict[str, Dict[str, Dict[str, Any]]] = {}
 
     for row in rows:
         parsed = parse_row(row)
         equipment = parsed["equipment"]
-        if not equipment:
+        parameter = parsed.get("parameter", "")
+        if not equipment or not parameter:
             continue
 
         timestamp = parse_timestamp(parsed["timestamp"])
-        existing = latest_equipment.get(equipment)
+        record = {**parsed, "_parsed_timestamp": timestamp}
+        equipment_rows = latest.setdefault(equipment, {})
+        existing = equipment_rows.get(parameter)
 
         if existing is None:
-            latest_equipment[equipment] = {**parsed, "_parsed_timestamp": timestamp}
+            equipment_rows[parameter] = record
             continue
 
         existing_ts = existing.get("_parsed_timestamp")
@@ -197,30 +252,83 @@ def get_latest_equipment_rows(rows: List[List[str]]) -> Dict[str, Dict[str, Any]
             continue
 
         if existing_ts is None or timestamp > existing_ts:
-            latest_equipment[equipment] = {**parsed, "_parsed_timestamp": timestamp}
+            equipment_rows[parameter] = record
 
-    return latest_equipment
+    return latest
+
+
+def get_equipment_status_aggregates(rows: List[List[str]]) -> Dict[str, Dict[str, Any]]:
+    """
+    Aggregate equipment health using the worst status across all latest parameter readings.
+
+    Severity order: ALARM > WARNING > NORMAL
+    """
+    latest_by_parameter = get_latest_parameter_rows(rows)
+    aggregates: Dict[str, Dict[str, Any]] = {}
+
+    for equipment, parameter_rows in latest_by_parameter.items():
+        statuses = [
+            normalize_status(record.get("status", STATUS_NORMAL))
+            for record in parameter_rows.values()
+        ]
+        overall_status = worst_status(*statuses)
+
+        representative: Optional[Dict[str, Any]] = None
+        representative_rank = -1
+        representative_ts = datetime.min
+
+        for record in parameter_rows.values():
+            record_status = normalize_status(record.get("status", STATUS_NORMAL))
+            record_rank = _STATUS_RANK[record_status]
+            record_ts = record.get("_parsed_timestamp") or datetime.min
+
+            if record_rank > representative_rank or (
+                record_rank == representative_rank and record_ts > representative_ts
+            ):
+                representative = record
+                representative_rank = record_rank
+                representative_ts = record_ts
+
+        latest_timestamp: Optional[datetime] = None
+        for record in parameter_rows.values():
+            record_ts = record.get("_parsed_timestamp")
+            if record_ts is None:
+                continue
+            if latest_timestamp is None or record_ts > latest_timestamp:
+                latest_timestamp = record_ts
+
+        aggregates[equipment] = {
+            "equipment": equipment,
+            "category": representative.get("category", "") if representative else "",
+            "worst_status": overall_status,
+            "parameter_rows": parameter_rows,
+            "representative": representative,
+            "_parsed_timestamp": latest_timestamp,
+        }
+
+    return aggregates
 
 
 def _load_summary(service: GMDGoogleSheetsService) -> Dict[str, int]:
     logger.info("Computing metrics for dashboard summary.")
     rows = fetch_and_clean_data(service)
-    latest_equipment = get_latest_equipment_rows(rows)
+    equipment_aggregates = get_equipment_status_aggregates(rows)
+    total_equipment = _configured_equipment_total()
 
     warning = 0
     alarm = 0
 
-    for record in latest_equipment.values():
-        status = record.get("status", "NORMAL")
-        if status == "WARNING":
+    for aggregate in equipment_aggregates.values():
+        status = aggregate.get("worst_status", STATUS_NORMAL)
+        if status == STATUS_WARNING:
             warning += 1
-        elif status == "ALARM":
+        elif status == STATUS_ALARM:
             alarm += 1
 
-    ok = max(0, TOTAL_EQUIPMENT - warning - alarm)
+    ok = max(0, total_equipment - warning - alarm)
 
     return {
-        "total": TOTAL_EQUIPMENT,
+        "total": total_equipment,
         "ok": ok,
         "warning": warning,
         "alarm": alarm
@@ -228,8 +336,9 @@ def _load_summary(service: GMDGoogleSheetsService) -> Dict[str, int]:
 
 
 def _fallback_summary() -> Dict[str, int]:
+    total_equipment = _configured_equipment_total()
     return {
-        "total": TOTAL_EQUIPMENT,
+        "total": total_equipment,
         "ok": 0,
         "warning": 0,
         "alarm": 0,
@@ -265,13 +374,21 @@ def get_recent_readings(
 def _load_active_alarms(service: GMDGoogleSheetsService) -> List[Dict[str, Any]]:
     logger.info("Retrieving active system alarms.")
     rows = fetch_and_clean_data(service)
-    latest_equipment = get_latest_equipment_rows(rows)
+    equipment_aggregates = get_equipment_status_aggregates(rows)
 
-    active_alarms = [
-        record
-        for record in latest_equipment.values()
-        if record.get("status") in ["WARNING", "ALARM"]
-    ]
+    active_alarms = []
+    for aggregate in equipment_aggregates.values():
+        for record in aggregate["parameter_rows"].values():
+            status = normalize_status(record.get("status", STATUS_NORMAL))
+            if status not in {STATUS_WARNING, STATUS_ALARM}:
+                continue
+
+            alarm_record = {**record, "status": status}
+            alarm_record["id"] = _alarm_id(alarm_record)
+            if alarm_record["id"] in _acknowledged_alarm_ids:
+                continue
+
+            active_alarms.append(alarm_record)
 
     active_alarms.sort(
         key=lambda x: x.get("_parsed_timestamp") or datetime.min,
@@ -297,6 +414,18 @@ def get_active_alarms(service: GMDGoogleSheetsService = Depends(get_sheets_servi
     )
 
 
+@router.post("/acknowledge-alarm/{alarm_id}")
+def acknowledge_alarm(alarm_id: str):
+    if not alarm_id or not alarm_id.strip():
+        raise HTTPException(status_code=400, detail="Alarm id is required.")
+
+    normalized_id = alarm_id.strip()
+    _acknowledged_alarm_ids.add(normalized_id)
+    _cache_invalidate("active_alarms")
+    logger.info("Acknowledged dashboard alarm id=%s", normalized_id)
+    return {"status": "ok", "id": normalized_id}
+
+
 def _load_equipment_health(service: GMDGoogleSheetsService) -> List[Dict[str, Any]]:
     logger.info("Calculating asset health statistics.")
     rows = fetch_and_clean_data(service)
@@ -317,45 +446,47 @@ def _load_equipment_health(service: GMDGoogleSheetsService) -> List[Dict[str, An
                 "normal_count": 0,
                 "warning_count": 0,
                 "alarm_count": 0,
-                "latest_status": parsed.get("status", "NORMAL"),
-                "latest_parameter": parsed.get("parameter", ""),
-                "latest_value": parsed.get("value", ""),
-                "latest_verified_by": parsed.get("verified_by", ""),
-                "latest_remarks": parsed.get("remarks", ""),
+                "latest_status": STATUS_NORMAL,
+                "latest_parameter": "",
+                "latest_value": "",
+                "latest_verified_by": "",
+                "latest_remarks": "",
                 "latest_timestamp": None,
             }
 
         metrics = equipment_metrics[equip]
         metrics["total_readings"] += 1
 
-        status = parsed.get("status", "NORMAL")
-        if status == "NORMAL":
+        status = normalize_status(parsed.get("status", STATUS_NORMAL))
+        if status == STATUS_NORMAL:
             metrics["normal_count"] += 1
-        elif status == "WARNING":
+        elif status == STATUS_WARNING:
             metrics["warning_count"] += 1
-        elif status == "ALARM":
+        elif status == STATUS_ALARM:
             metrics["alarm_count"] += 1
         else:
             metrics["normal_count"] += 1
 
-        timestamp = parse_timestamp(parsed.get("timestamp", ""))
-        current_latest = metrics.get("latest_timestamp")
+    equipment_aggregates = get_equipment_status_aggregates(rows)
+    for equip, aggregate in equipment_aggregates.items():
+        if equip not in equipment_metrics:
+            continue
 
-        if timestamp is not None and (current_latest is None or timestamp > current_latest):
-            metrics.update(
-                {
-                    "latest_status": status,
-                    "latest_parameter": parsed.get("parameter", ""),
-                    "latest_value": parsed.get("value", ""),
-                    "latest_verified_by": parsed.get("verified_by", ""),
-                    "latest_remarks": parsed.get("remarks", ""),
-                    "latest_timestamp": timestamp,
-                }
-            )
+        metrics = equipment_metrics[equip]
+        representative = aggregate.get("representative") or {}
+        latest_timestamp = aggregate.get("_parsed_timestamp")
+
+        metrics["latest_status"] = aggregate.get("worst_status", STATUS_NORMAL)
+        metrics["latest_parameter"] = representative.get("parameter", "")
+        metrics["latest_value"] = representative.get("value", "")
+        metrics["latest_verified_by"] = representative.get("verified_by", "")
+        metrics["latest_remarks"] = representative.get("remarks", "")
+        metrics["latest_timestamp"] = latest_timestamp
 
     health_report = []
     for metrics in equipment_metrics.values():
         latest_timestamp = metrics.get("latest_timestamp")
+        latest_status = normalize_status(metrics.get("latest_status", STATUS_NORMAL))
         metrics["last_reading_time"] = (
             latest_timestamp.strftime("%Y-%m-%d %H:%M:%S") if latest_timestamp else ""
         )
@@ -363,7 +494,7 @@ def _load_equipment_health(service: GMDGoogleSheetsService) -> List[Dict[str, An
             latest_timestamp.strftime("%Y-%m-%d %H:%M:%S") if latest_timestamp else ""
         )
         metrics["last_updated"] = format_last_updated(latest_timestamp)
-        metrics["health_percentage"] = 100.0 if metrics.get("latest_status") == "NORMAL" else 0.0
+        metrics["health_percentage"] = 100.0 if latest_status == STATUS_NORMAL else 0.0
         health_report.append(metrics)
 
     health_report.sort(key=lambda x: x.get("equipment", ""))

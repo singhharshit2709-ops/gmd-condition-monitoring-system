@@ -2,6 +2,7 @@ import logging
 from datetime import datetime
 from fastapi import APIRouter, HTTPException, Depends, status
 from models.gmd_models import GMDReadingsRequest, BulkSubmissionResponse
+from gmd_config import validate_gmd_submission
 from services.google_sheets_service import GMDGoogleSheetsService
 
 # Configure structured routing logger matching core systems
@@ -35,13 +36,19 @@ async def submit_bulk_readings(
     """
     logger.info(f"Received batch transmission request for category: '{payload.category}', asset: '{payload.equipment}'")
 
-    # Guardrail: Catch and reject instances where incoming dictionary lacks keys or contains only null blocks
-    if not payload.readings or not isinstance(payload.readings, dict):
-        logger.warning(f"Request dropped from tracking flow. Empty or non-object readings payload received.")
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Transaction payload mapping rejected: Readings field cannot be empty."
+    try:
+        validate_gmd_submission(
+            category=payload.category,
+            equipment=payload.equipment,
+            readings=payload.readings,
+            verified_by=payload.verified_by,
         )
+    except ValueError as validation_err:
+        logger.warning("Bulk submission rejected: %s", validation_err)
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail=str(validation_err),
+        ) from validation_err
 
     try:
         # Process and unpack flat field measurements directly via schema loops

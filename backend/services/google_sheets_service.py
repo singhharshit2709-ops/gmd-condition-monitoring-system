@@ -1,4 +1,3 @@
-import os
 import logging
 import threading
 import time
@@ -6,9 +5,19 @@ from datetime import datetime
 from typing import Dict, Any, List, Optional
 
 import gspread
-from google.oauth2.service_account import Credentials
 
-# Set up standard logging for the service
+from gmd_config import validate_gmd_submission
+from services.sheets_config import (
+    ensure_gmd_header_row,
+    get_cache_ttl_seconds,
+    get_or_create_worksheet,
+    get_spreadsheet_id,
+    get_worksheet_name,
+    is_sheets_enabled,
+    load_service_account_credentials,
+    open_spreadsheet,
+)
+
 logger = logging.getLogger("gmd_monitoring")
 logging.basicConfig(level=logging.INFO)
 
@@ -28,37 +37,37 @@ class GMDGoogleSheetsService:
         if getattr(self, "_initialized", False):
             return
 
-        spreadsheet_id = os.getenv("GOOGLE_SPREADSHEET_ID")
-        credentials_file = os.getenv("GOOGLE_CREDENTIALS_FILE")
+        if not is_sheets_enabled():
+            raise RuntimeError(
+                "Google Sheets is disabled. Set GOOGLE_SHEETS_ENABLED=true."
+            )
 
+        spreadsheet_id = get_spreadsheet_id()
         if not spreadsheet_id:
-            raise RuntimeError("GOOGLE_SPREADSHEET_ID not configured")
+            raise RuntimeError(
+                "Spreadsheet ID not configured. Set GOOGLE_SHEET_ID."
+            )
 
-        if not credentials_file:
-            raise RuntimeError("GOOGLE_CREDENTIALS_FILE not configured")
-
-        scopes = [
-            "https://www.googleapis.com/auth/spreadsheets",
-            "https://www.googleapis.com/auth/drive",
-        ]
-
-        creds = Credentials.from_service_account_file(
-            credentials_file,
-            scopes=scopes,
-        )
+        creds, credential_source = load_service_account_credentials()
+        worksheet_name = get_worksheet_name()
 
         client = gspread.authorize(creds)
-        logger.info(f"Connecting to Spreadsheet ID: {spreadsheet_id}")
+        logger.info(
+            "Connecting to spreadsheet id=%s worksheet=%r credentials=%s",
+            spreadsheet_id,
+            worksheet_name,
+            credential_source,
+        )
 
-        spreadsheet = client.open_by_key(spreadsheet_id)
-        logger.info("Spreadsheet opened successfully")
-        logger.info(f"Spreadsheet title: {spreadsheet.title}")
+        spreadsheet = open_spreadsheet(client, spreadsheet_id)
+        logger.info("Spreadsheet opened successfully: %s", spreadsheet.title)
 
-        self.sheet = spreadsheet.worksheet("Sheet1")
-        logger.info("Successfully targeted 'Sheet1'")
+        self.sheet = get_or_create_worksheet(spreadsheet, worksheet_name)
+        ensure_gmd_header_row(self.sheet)
+        logger.info("Successfully targeted worksheet %r", worksheet_name)
 
         self._cache_lock = threading.Lock()
-        self._cache_ttl_seconds = int(os.getenv("GOOGLE_SHEETS_CACHE_TTL_SECONDS", "45"))
+        self._cache_ttl_seconds = get_cache_ttl_seconds()
         self._cached_sheet_timestamp = 0.0
         self._cached_sheet_values: Optional[List[List[str]]] = None
         self._cached_sheet_records: Optional[List[Dict[str, Any]]] = None
@@ -107,8 +116,14 @@ class GMDGoogleSheetsService:
         readings: Dict[str, Any],
         verified_by: str,
         remarks: str = "",
-        entry_source: str = "Field"
+        entry_source: str = "Field",
     ) -> Dict[str, Any]:
+        validate_gmd_submission(
+            category=category,
+            equipment=equipment,
+            readings=readings,
+            verified_by=verified_by,
+        )
 
         rows = []
         timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
@@ -119,22 +134,23 @@ class GMDGoogleSheetsService:
                 category,
                 equipment,
                 parameter,
-                "",  # Intentional placeholder based on original business logic
-                value,
+                "",
+                float(value),
                 "NORMAL",
                 verified_by,
                 remarks,
-                entry_source
+                entry_source,
             ])
 
         if rows:
             self.sheet.append_rows(
                 rows,
-                value_input_option="USER_ENTERED"
+                value_input_option="USER_ENTERED",
             )
-            logger.info(f"Successfully appended {len(rows)} rows to Google Sheets.")
+            self.clear_cache()
+            logger.info("Successfully appended %d rows to Google Sheets.", len(rows))
 
         return {
             "success": True,
-            "rows_appended": len(rows)
+            "rows_appended": len(rows),
         }

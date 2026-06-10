@@ -28,14 +28,44 @@ class GMDReadingsRequest(BaseModel):
     @classmethod
     def strip_whitespace(cls, value):
         if isinstance(value, str):
-            return value.strip()
+            value = value.strip()
+        return value
+
+    @field_validator("category", "equipment", "verified_by")
+    @classmethod
+    def reject_empty_required_fields(cls, value, info):
+        if not value:
+            raise ValueError(f"{info.field_name} is required and cannot be empty.")
         return value
 
     @field_validator("readings")
     @classmethod
     def validate_readings_not_empty(cls, value):
         if not value:
-            raise ValueError("Readings cannot be empty")
+            raise ValueError("At least one reading is required.")
+        return value
+
+    @field_validator("readings")
+    @classmethod
+    def validate_readings_numeric_and_non_negative(cls, value):
+        for parameter, reading_value in value.items():
+            if not isinstance(parameter, str) or not parameter.strip():
+                raise ValueError("Reading parameter names cannot be empty.")
+
+            if reading_value is None or (isinstance(reading_value, str) and not reading_value.strip()):
+                raise ValueError(f"Reading for '{parameter}' cannot be empty.")
+
+            try:
+                numeric_value = float(reading_value)
+            except (TypeError, ValueError) as exc:
+                raise ValueError(
+                    f"Reading for '{parameter}' must be numeric; received '{reading_value}'."
+                ) from exc
+
+            if numeric_value < 0:
+                raise ValueError(
+                    f"Reading for '{parameter}' cannot be negative; received {numeric_value}."
+                )
         return value
 
 

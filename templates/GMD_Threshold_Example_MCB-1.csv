@@ -1,0 +1,7 @@
+﻿Category,Equipment,Parameter_Key,Parameter_Display_Name,Unit,Normal_Limit,Warning_Limit,Data_Source,Approved_By,Approval_Date,Notes
+Blowers,MCB-1,vertical_vibration,Vertical Vibration,mm/s,6.0,10.0,OEM / historical baseline / GT reference,Maintenance Lead (example),YYYY-MM-DD,GT machine_config.json MCB1 (Mold Cooling Blower) - verify for GMD
+Blowers,MCB-1,horizontal_vibration,Horizontal Vibration,mm/s,6.0,10.0,OEM / historical baseline / GT reference,Maintenance Lead (example),YYYY-MM-DD,GT machine_config.json MCB1 - apply same axis limits unless OEM specifies otherwise
+Blowers,MCB-1,axial_vibration,Axial Vibration,mm/s,6.0,10.0,OEM / historical baseline / GT reference,Maintenance Lead (example),YYYY-MM-DD,GT machine_config.json MCB1 - apply same axis limits unless OEM specifies otherwise
+Blowers,MCB-1,temperature,Temperature,deg C,60,75,OEM / historical baseline / GT reference,Maintenance Lead (example),YYYY-MM-DD,GT machine_config.json MCB1
+Blowers,MCB-1,current,Current,A,200,240,OEM / historical baseline / GT reference,Maintenance Lead (example),YYYY-MM-DD,GT machine_config.json MCB1 (160 kW Mold Cooling Blower)
+Blowers,MCB-1,voltage,Voltage,V,380,440,OEM / historical baseline / GT reference,Maintenance Lead (example),YYYY-MM-DD,ILLUSTRATIVE ONLY - engineering must confirm nominal line voltage and tolerance

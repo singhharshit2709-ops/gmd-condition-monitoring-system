@@ -100,8 +100,12 @@ const Dashboard = () => {
   };
 
   const acknowledgeAlarm = async (alarmId) => {
+    if (!alarmId) {
+      console.error("Cannot acknowledge alarm without id");
+      return;
+    }
     try {
-      await axios.post(`${API}/acknowledge-alarm/${alarmId}`);
+      await axios.post(`${API}/dashboard/acknowledge-alarm/${alarmId}`);
       await fetchData();
     } catch (e) {
       console.error("POST FAILED:", e);
