@@ -35,8 +35,13 @@ let webpackConfig = {
   webpack: {
     alias: {
       '@': path.resolve(__dirname, 'src'),
+      '@gmd-config/v2': path.resolve(__dirname, '../backend/gmd_machine_config_v2.json'),
     },
     configure: (webpackConfig) => {
+      // Allow importing gmd_machine_config_v2.json from backend (single source of truth)
+      webpackConfig.resolve.plugins = webpackConfig.resolve.plugins.filter(
+        (plugin) => plugin.constructor?.name !== "ModuleScopePlugin"
+      );
 
       // Add ignored patterns to reduce watched directories
         webpackConfig.watchOptions = {
