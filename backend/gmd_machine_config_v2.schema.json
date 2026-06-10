@@ -450,6 +450,48 @@
             "$ref": "#/$defs/Category"
           }
         },
+        "areas": {
+          "type": "array",
+          "description": "Plant tank/area navigation options for round sheet entry UI.",
+          "items": {
+            "$ref": "#/$defs/PlantArea"
+          }
+        },
+        "extensions": {
+          "$ref": "#/$defs/Extensions"
+        }
+      }
+    },
+    "PlantArea": {
+      "type": "object",
+      "description": "A tank or process area used to filter equipment in the V2 entry UI.",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "display_name",
+        "display_order"
+      ],
+      "properties": {
+        "id": {
+          "$ref": "#/$defs/SlugId"
+        },
+        "display_name": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 120,
+          "description": "Tank/area label shown in the UI (e.g. A Tank)."
+        },
+        "display_order": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "active": {
+          "type": "boolean",
+          "default": true
+        },
+        "metadata": {
+          "$ref": "#/$defs/Metadata"
+        },
         "extensions": {
           "$ref": "#/$defs/Extensions"
         }
@@ -568,6 +610,17 @@
           "type": "boolean",
           "default": false,
           "description": "Flag for phased V2 rollout."
+        },
+        "area": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 120,
+          "description": "Tank/area display_name this equipment belongs to. Must match a plant areas entry."
+        },
+        "display_order": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Sort order within an area equipment selector."
         },
         "version": {
           "$ref": "#/$defs/SemVer",

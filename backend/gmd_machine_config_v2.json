@@ -55,6 +55,32 @@
       "locale": "en-IN",
       "display_order": 1,
       "active": true,
+      "areas": [
+        {
+          "id": "a_tank",
+          "display_name": "A Tank",
+          "display_order": 1,
+          "active": true
+        },
+        {
+          "id": "e_tank",
+          "display_name": "E Tank",
+          "display_order": 2,
+          "active": true
+        },
+        {
+          "id": "g_tank",
+          "display_name": "G Tank",
+          "display_order": 3,
+          "active": true
+        },
+        {
+          "id": "k_tank",
+          "display_name": "K Tank",
+          "display_order": 4,
+          "active": true
+        }
+      ],
       "categories": [
         {
           "id": "blowers",
@@ -67,6 +93,8 @@
               "id": "mcb_1",
               "display_name": "MCB-1",
               "category_id": "blowers",
+              "area": "A Tank",
+              "display_order": 1,
               "description": "Mold Cooling Blower (160 kW)",
               "aliases": ["MCB1"],
               "expected_reading_count": 16,
