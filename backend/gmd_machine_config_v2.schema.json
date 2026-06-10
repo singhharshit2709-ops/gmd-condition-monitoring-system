@@ -1,0 +1,1492 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://gmd.neutralglass.local/schemas/machine-config/v2.schema.json",
+  "title": "GMD Machine Configuration V2",
+  "description": "Configuration schema for the GMD Condition Monitoring System. Defines plants, categories, equipment hierarchy (sections, groups, parameters), validation rules, thresholds, and integration metadata. This schema validates structure only — it does not contain equipment instances or live readings.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "$schema",
+    "schema_id",
+    "schema_version",
+    "config_version",
+    "metadata",
+    "plants"
+  ],
+  "properties": {
+    "$schema": {
+      "type": "string",
+      "format": "uri",
+      "description": "JSON Schema URI used by validators and editors."
+    },
+    "schema_id": {
+      "type": "string",
+      "const": "gmd.machine_config.v2",
+      "description": "Stable identifier for the GMD machine configuration schema family."
+    },
+    "schema_version": {
+      "$ref": "#/$defs/SemVer",
+      "description": "Semantic version of the schema specification this document conforms to."
+    },
+    "config_version": {
+      "$ref": "#/$defs/SemVer",
+      "description": "Semantic version of this configuration instance. Bump on behavioral changes."
+    },
+    "metadata": {
+      "$ref": "#/$defs/DocumentMetadata",
+      "description": "File-level governance, provenance, and changelog."
+    },
+    "parameter_types": {
+      "type": "object",
+      "description": "Optional global registry of reusable measurement type definitions.",
+      "additionalProperties": {
+        "$ref": "#/$defs/ParameterTypeDefinition"
+      }
+    },
+    "validation_hooks": {
+      "type": "object",
+      "description": "Optional registry of named custom validation hooks referenced by parameters.",
+      "additionalProperties": {
+        "$ref": "#/$defs/ValidationHookDefinition"
+      }
+    },
+    "sheet_templates": {
+      "type": "array",
+      "description": "Optional reusable section/group skeletons for similar equipment.",
+      "items": {
+        "$ref": "#/$defs/SheetTemplate"
+      }
+    },
+    "integration": {
+      "$ref": "#/$defs/IntegrationDefaults",
+      "description": "Optional plant-wide Industry 4.0 integration defaults."
+    },
+    "plants": {
+      "type": "array",
+      "description": "All plants covered by this configuration file.",
+      "minItems": 1,
+      "items": {
+        "$ref": "#/$defs/Plant"
+      }
+    },
+    "extensions": {
+      "$ref": "#/$defs/Extensions"
+    }
+  },
+  "$defs": {
+    "SemVer": {
+      "type": "string",
+      "pattern": "^(0|[1-9]\\d*)\\.(0|[1-9]\\d*)\\.(0|[1-9]\\d*)(?:-((?:0|[1-9]\\d*|\\d*[a-zA-Z-][0-9a-zA-Z-]*)(?:\\.(?:0|[1-9]\\d*|\\d*[a-zA-Z-][0-9a-zA-Z-]*))*))?(?:\\+([0-9a-zA-Z-]+(?:\\.[0-9a-zA-Z-]+)*))?$",
+      "description": "Semantic version string (semver 2.0.0)."
+    },
+    "SlugId": {
+      "type": "string",
+      "pattern": "^[a-z][a-z0-9_]{2,63}$",
+      "description": "Stable lowercase identifier: starts with a letter, then letters, digits, or underscores."
+    },
+    "ParameterKey": {
+      "type": "string",
+      "pattern": "^[a-z][a-z0-9_]{2,127}$",
+      "description": "Stable machine key written to Google Sheets Parameter column. Immutable after first production reading."
+    },
+    "ISODate": {
+      "type": "string",
+      "format": "date",
+      "description": "ISO 8601 calendar date (YYYY-MM-DD)."
+    },
+    "ISODateTime": {
+      "type": "string",
+      "format": "date-time",
+      "description": "ISO 8601 date-time with optional timezone offset."
+    },
+    "Extensions": {
+      "type": "object",
+      "description": "Namespaced future fields. Runtimes must ignore unknown keys.",
+      "additionalProperties": true
+    },
+    "Metadata": {
+      "type": "object",
+      "description": "Reusable metadata attachable at any hierarchy level.",
+      "additionalProperties": false,
+      "properties": {
+        "title": {
+          "type": "string",
+          "maxLength": 200
+        },
+        "description": {
+          "type": "string",
+          "maxLength": 2000
+        },
+        "tags": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "maxLength": 64
+          },
+          "uniqueItems": true
+        },
+        "data_sources": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "maxLength": 500
+          }
+        },
+        "notes": {
+          "type": "string",
+          "maxLength": 2000
+        },
+        "custom": {
+          "type": "object",
+          "additionalProperties": true
+        },
+        "extensions": {
+          "$ref": "#/$defs/Extensions"
+        }
+      }
+    },
+    "DocumentMetadata": {
+      "type": "object",
+      "description": "Root document metadata and changelog.",
+      "additionalProperties": false,
+      "properties": {
+        "title": {
+          "type": "string",
+          "maxLength": 200
+        },
+        "description": {
+          "type": "string",
+          "maxLength": 2000
+        },
+        "plant_site": {
+          "type": "string",
+          "maxLength": 200
+        },
+        "effective_from": {
+          "$ref": "#/$defs/ISODate"
+        },
+        "effective_until": {
+          "oneOf": [
+            {
+              "$ref": "#/$defs/ISODate"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "supersedes": {
+          "$ref": "#/$defs/SemVer"
+        },
+        "approved_by": {
+          "type": "string",
+          "maxLength": 200
+        },
+        "approved_at": {
+          "$ref": "#/$defs/ISODateTime"
+        },
+        "prepared_by": {
+          "type": "string",
+          "maxLength": 200
+        },
+        "data_sources": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "maxLength": 500
+          }
+        },
+        "changelog": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/ChangelogEntry"
+          }
+        },
+        "tags": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "maxLength": 64
+          },
+          "uniqueItems": true
+        },
+        "custom": {
+          "type": "object",
+          "additionalProperties": true
+        },
+        "extensions": {
+          "$ref": "#/$defs/Extensions"
+        }
+      }
+    },
+    "ChangelogEntry": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "version",
+        "date",
+        "summary"
+      ],
+      "properties": {
+        "version": {
+          "$ref": "#/$defs/SemVer"
+        },
+        "date": {
+          "$ref": "#/$defs/ISODate"
+        },
+        "author": {
+          "type": "string",
+          "maxLength": 200
+        },
+        "summary": {
+          "type": "string",
+          "maxLength": 500
+        }
+      }
+    },
+    "ApprovalRecord": {
+      "type": "object",
+      "description": "Engineering or maintenance sign-off record.",
+      "additionalProperties": false,
+      "required": [
+        "approved_by",
+        "approved_at"
+      ],
+      "properties": {
+        "approved_by": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 200
+        },
+        "approved_at": {
+          "$ref": "#/$defs/ISODateTime"
+        },
+        "engineering_reviewer": {
+          "type": "string",
+          "maxLength": 200
+        },
+        "document_reference": {
+          "type": "string",
+          "maxLength": 100
+        }
+      }
+    },
+    "RevisionRecord": {
+      "type": "object",
+      "description": "Change control and revision history for a plant configuration.",
+      "additionalProperties": false,
+      "required": [
+        "revision_number",
+        "revision_date",
+        "change_summary"
+      ],
+      "properties": {
+        "revision_number": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "revision_date": {
+          "$ref": "#/$defs/ISODate"
+        },
+        "revised_by": {
+          "type": "string",
+          "maxLength": 200
+        },
+        "change_summary": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 1000
+        },
+        "supersedes_config_version": {
+          "$ref": "#/$defs/SemVer"
+        },
+        "changelog": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/ChangelogEntry"
+          }
+        }
+      }
+    },
+    "SiteMetadata": {
+      "type": "object",
+      "description": "Physical site descriptors for a plant.",
+      "additionalProperties": false,
+      "properties": {
+        "address": {
+          "type": "string",
+          "maxLength": 500
+        },
+        "country": {
+          "type": "string",
+          "pattern": "^[A-Z]{2}$",
+          "description": "ISO 3166-1 alpha-2 country code."
+        },
+        "region": {
+          "type": "string",
+          "maxLength": 100
+        },
+        "gps": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "lat",
+            "lon"
+          ],
+          "properties": {
+            "lat": {
+              "type": "number",
+              "minimum": -90,
+              "maximum": 90
+            },
+            "lon": {
+              "type": "number",
+              "minimum": -180,
+              "maximum": 180
+            }
+          }
+        },
+        "site_code": {
+          "type": "string",
+          "maxLength": 32
+        },
+        "extensions": {
+          "$ref": "#/$defs/Extensions"
+        }
+      }
+    },
+    "Plant": {
+      "type": "object",
+      "description": "A manufacturing site containing monitoring categories and equipment.",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "name",
+        "schema_version",
+        "effective_date",
+        "approval",
+        "revision",
+        "active",
+        "categories"
+      ],
+      "properties": {
+        "id": {
+          "$ref": "#/$defs/SlugId",
+          "description": "Stable plant identifier for APIs, logs, and PLC namespaces."
+        },
+        "name": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 120,
+          "description": "Human-readable plant display name."
+        },
+        "code": {
+          "type": "string",
+          "minLength": 2,
+          "maxLength": 16,
+          "description": "Short plant code."
+        },
+        "site_metadata": {
+          "$ref": "#/$defs/SiteMetadata"
+        },
+        "schema_version": {
+          "$ref": "#/$defs/SemVer",
+          "description": "Schema specification version this plant configuration conforms to."
+        },
+        "effective_date": {
+          "$ref": "#/$defs/ISODate",
+          "description": "Date this plant configuration becomes operational."
+        },
+        "effective_until": {
+          "oneOf": [
+            {
+              "$ref": "#/$defs/ISODate"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Date this plant configuration is superseded, or null if active."
+        },
+        "approval": {
+          "$ref": "#/$defs/ApprovalRecord"
+        },
+        "revision": {
+          "$ref": "#/$defs/RevisionRecord"
+        },
+        "timezone": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 64,
+          "description": "IANA timezone identifier (e.g. Asia/Kolkata)."
+        },
+        "locale": {
+          "type": "string",
+          "minLength": 2,
+          "maxLength": 16,
+          "description": "Default UI locale (BCP 47, e.g. en-IN)."
+        },
+        "display_order": {
+          "type": "integer",
+          "minimum": 0,
+          "default": 0
+        },
+        "active": {
+          "type": "boolean",
+          "description": "Whether this plant is enabled in the system."
+        },
+        "metadata": {
+          "$ref": "#/$defs/Metadata"
+        },
+        "categories": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "$ref": "#/$defs/Category"
+          }
+        },
+        "extensions": {
+          "$ref": "#/$defs/Extensions"
+        }
+      }
+    },
+    "Category": {
+      "type": "object",
+      "description": "Monitoring category (e.g. Blowers). Maps to Google Sheets Category column via display_name.",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "display_name",
+        "display_order",
+        "equipment"
+      ],
+      "properties": {
+        "id": {
+          "$ref": "#/$defs/SlugId"
+        },
+        "display_name": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 120,
+          "description": "Exact category name used in UI and Google Sheets. Immutable after go-live."
+        },
+        "display_order": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "description": {
+          "type": "string",
+          "maxLength": 500
+        },
+        "active": {
+          "type": "boolean",
+          "default": true
+        },
+        "equipment": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "$ref": "#/$defs/Equipment"
+          }
+        },
+        "metadata": {
+          "$ref": "#/$defs/Metadata"
+        },
+        "extensions": {
+          "$ref": "#/$defs/Extensions"
+        }
+      }
+    },
+    "Equipment": {
+      "type": "object",
+      "description": "A physical or logical asset (e.g. MCB-1). Maps to Google Sheets Equipment column via display_name.",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "display_name",
+        "category_id",
+        "sections",
+        "expected_reading_count",
+        "active",
+        "version"
+      ],
+      "properties": {
+        "id": {
+          "$ref": "#/$defs/SlugId",
+          "description": "Stable equipment key unique within the plant."
+        },
+        "display_name": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 120,
+          "description": "Exact equipment name used in UI and Google Sheets. Immutable after go-live."
+        },
+        "category_id": {
+          "$ref": "#/$defs/SlugId",
+          "description": "Must match the parent category id."
+        },
+        "description": {
+          "type": "string",
+          "maxLength": 500
+        },
+        "aliases": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 120
+          },
+          "uniqueItems": true
+        },
+        "sections": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "$ref": "#/$defs/Section"
+          }
+        },
+        "expected_reading_count": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "Total active parameters for round completion progress UI."
+        },
+        "minimum_required_count": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "Minimum parameters required for a valid round submission."
+        },
+        "active": {
+          "type": "boolean",
+          "description": "Whether equipment accepts submissions and appears in UI."
+        },
+        "pilot": {
+          "type": "boolean",
+          "default": false,
+          "description": "Flag for phased V2 rollout."
+        },
+        "version": {
+          "$ref": "#/$defs/SemVer",
+          "description": "Equipment definition version, independent of config_version."
+        },
+        "sheet_template_id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 64,
+          "description": "Optional reference to a sheet_templates entry."
+        },
+        "metadata": {
+          "$ref": "#/$defs/Metadata"
+        },
+        "extensions": {
+          "$ref": "#/$defs/Extensions"
+        }
+      }
+    },
+    "Section": {
+      "type": "object",
+      "description": "Top-level round sheet section (e.g. Blower, Motor).",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "label",
+        "display_order",
+        "groups"
+      ],
+      "properties": {
+        "id": {
+          "$ref": "#/$defs/SlugId",
+          "description": "Stable section key unique within equipment."
+        },
+        "label": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 120,
+          "description": "Primary UI section heading matching the paper round sheet."
+        },
+        "display_order": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "description": {
+          "type": "string",
+          "maxLength": 500
+        },
+        "sheet_heading": {
+          "type": "string",
+          "maxLength": 120,
+          "description": "Exact paper sheet heading when different from label."
+        },
+        "active": {
+          "type": "boolean",
+          "default": true
+        },
+        "groups": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "$ref": "#/$defs/Group"
+          }
+        },
+        "metadata": {
+          "$ref": "#/$defs/Metadata"
+        },
+        "extensions": {
+          "$ref": "#/$defs/Extensions"
+        }
+      }
+    },
+    "Group": {
+      "type": "object",
+      "description": "Sub-section on the round sheet (e.g. Drive End, Non Drive End).",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "label",
+        "display_order",
+        "collapsible",
+        "parameters"
+      ],
+      "properties": {
+        "id": {
+          "$ref": "#/$defs/SlugId",
+          "description": "Stable group key unique within section."
+        },
+        "label": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 120,
+          "description": "UI sub-heading matching the paper round sheet."
+        },
+        "display_order": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "description": {
+          "type": "string",
+          "maxLength": 500
+        },
+        "sheet_heading": {
+          "type": "string",
+          "maxLength": 120
+        },
+        "abbreviation": {
+          "type": "string",
+          "maxLength": 8,
+          "description": "Short form for compact UI (e.g. DE, NDE)."
+        },
+        "collapsible": {
+          "type": "boolean",
+          "description": "Whether the UI may collapse this group."
+        },
+        "default_expanded": {
+          "type": "boolean",
+          "default": true
+        },
+        "layout": {
+          "type": "string",
+          "enum": [
+            "default",
+            "vibration_triplet",
+            "compact",
+            "inline"
+          ],
+          "description": "UI layout hint for form renderers."
+        },
+        "active": {
+          "type": "boolean",
+          "default": true
+        },
+        "parameters": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "$ref": "#/$defs/Parameter"
+          }
+        },
+        "metadata": {
+          "$ref": "#/$defs/Metadata"
+        },
+        "extensions": {
+          "$ref": "#/$defs/Extensions"
+        }
+      }
+    },
+    "Parameter": {
+      "type": "object",
+      "description": "Atomic measurement point. Maps to one Google Sheets row per reading.",
+      "additionalProperties": false,
+      "required": [
+        "key",
+        "label",
+        "full_label",
+        "measurement_type",
+        "unit",
+        "display_order",
+        "required",
+        "validation"
+      ],
+      "properties": {
+        "key": {
+          "$ref": "#/$defs/ParameterKey"
+        },
+        "label": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 80,
+          "description": "Short display label shown beside the input."
+        },
+        "full_label": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 200,
+          "description": "Composite label for alarms, reports, and Google Sheets Location column."
+        },
+        "description": {
+          "type": "string",
+          "maxLength": 500,
+          "description": "Longer explanation for tooltips and documentation."
+        },
+        "measurement_type": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 64,
+          "description": "Semantic measurement type for analytics and PLC mapping."
+        },
+        "unit": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 20,
+          "description": "Engineering unit displayed beside the input."
+        },
+        "display_order": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "required": {
+          "type": "boolean",
+          "description": "Whether this parameter must be filled for a complete round."
+        },
+        "is_visible": {
+          "type": "boolean",
+          "default": true,
+          "description": "Controls UI visibility without removing the parameter."
+        },
+        "editable": {
+          "type": "boolean",
+          "default": true,
+          "description": "Whether the operator can manually edit this value. Set false for PLC-fed or system-derived values."
+        },
+        "source": {
+          "$ref": "#/$defs/ParameterSource"
+        },
+        "validation": {
+          "$ref": "#/$defs/ValidationRules"
+        },
+        "thresholds": {
+          "oneOf": [
+            {
+              "$ref": "#/$defs/Thresholds"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "classification_mode": {
+          "$ref": "#/$defs/ClassificationMode"
+        },
+        "decimal_precision": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 6,
+          "description": "Display and input decimal precision."
+        },
+        "default_value": {
+          "description": "Optional pre-fill value. Must satisfy validation rules.",
+          "oneOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "string",
+              "maxLength": 200
+            },
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "placeholder": {
+          "type": "string",
+          "maxLength": 40,
+          "description": "Input placeholder hint."
+        },
+        "help_text": {
+          "type": "string",
+          "maxLength": 300,
+          "description": "Operator guidance displayed below the input."
+        },
+        "remarks": {
+          "$ref": "#/$defs/RemarksConfig"
+        },
+        "plc_tag": {
+          "oneOf": [
+            {
+              "type": "string",
+              "maxLength": 256
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Primary PLC/SCADA tag address for future automated ingest."
+        },
+        "integration": {
+          "$ref": "#/$defs/ParameterIntegration"
+        },
+        "deprecated": {
+          "type": "boolean",
+          "default": false,
+          "description": "When true, parameter is excluded from forms but preserved for historical reads."
+        },
+        "deprecated_at": {
+          "$ref": "#/$defs/ISODate"
+        },
+        "replaces_key": {
+          "$ref": "#/$defs/ParameterKey",
+          "description": "Prior parameter key this entry supersedes (V1 migration lineage)."
+        },
+        "replaced_by_key": {
+          "oneOf": [
+            {
+              "$ref": "#/$defs/ParameterKey"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "metadata": {
+          "$ref": "#/$defs/Metadata"
+        },
+        "extensions": {
+          "$ref": "#/$defs/Extensions"
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "thresholds": {
+                "type": "object",
+                "properties": {
+                  "enabled": {
+                    "const": true
+                  }
+                },
+                "required": [
+                  "enabled"
+                ]
+              }
+            },
+            "required": [
+              "thresholds"
+            ]
+          },
+          "then": {
+            "required": [
+              "classification_mode"
+            ]
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "deprecated": {
+                "const": true
+              }
+            },
+            "required": [
+              "deprecated"
+            ]
+          },
+          "then": {
+            "required": [
+              "deprecated_at"
+            ]
+          }
+        }
+      ]
+    },
+    "ClassificationMode": {
+      "type": "string",
+      "enum": [
+        "higher_is_worse",
+        "lower_is_worse",
+        "range_based",
+        "bidirectional",
+        "manual",
+        "none"
+      ],
+      "description": "Algorithm used to classify readings against thresholds."
+    },
+    "ParameterSource": {
+      "type": "string",
+      "enum": [
+        "manual",
+        "plc",
+        "scada",
+        "calculated",
+        "derived"
+      ],
+      "default": "manual",
+      "description": "Origin of the reading value. Distinguishes operator entry from automated or computed sources."
+    },
+    "ValidationRules": {
+      "type": "object",
+      "description": "Input validation rules for a parameter.",
+      "additionalProperties": false,
+      "required": [
+        "value_type"
+      ],
+      "properties": {
+        "value_type": {
+          "type": "string",
+          "enum": [
+            "number",
+            "integer",
+            "string",
+            "boolean"
+          ],
+          "description": "Expected input data type."
+        },
+        "required": {
+          "type": "boolean",
+          "description": "Optional override of parameter-level required flag."
+        },
+        "min": {
+          "type": "number",
+          "description": "Minimum inclusive value for numeric types."
+        },
+        "max": {
+          "type": "number",
+          "description": "Maximum inclusive value for numeric types."
+        },
+        "decimal_precision": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 6
+        },
+        "integer_only": {
+          "type": "boolean",
+          "default": false
+        },
+        "step": {
+          "type": "number",
+          "exclusiveMinimum": 0,
+          "description": "Input increment hint for numeric fields."
+        },
+        "allow_negative": {
+          "type": "boolean",
+          "default": false,
+          "description": "When false, numeric values default to non-negative unless min is set below zero."
+        },
+        "regex": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 500,
+          "description": "Regular expression pattern for string validation."
+        },
+        "enum_values": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "string",
+            "maxLength": 200
+          },
+          "uniqueItems": true
+        },
+        "custom_validation_hook": {
+          "oneOf": [
+            {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 64
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Reference to a validation_hooks registry entry."
+        },
+        "error_message": {
+          "type": "string",
+          "maxLength": 200,
+          "description": "Operator-facing message when validation fails."
+        },
+        "extensions": {
+          "$ref": "#/$defs/Extensions"
+        }
+      }
+    },
+    "Thresholds": {
+      "type": "object",
+      "description": "Threshold limits for automatic status classification.",
+      "additionalProperties": false,
+      "required": [
+        "enabled"
+      ],
+      "properties": {
+        "enabled": {
+          "type": "boolean",
+          "description": "Whether automatic classification is applied."
+        },
+        "not_applicable": {
+          "type": "boolean",
+          "default": false,
+          "description": "Record-only parameter with no applicable limits."
+        },
+        "normal_limit": {
+          "type": "number",
+          "description": "Upper bound of NORMAL zone for higher_is_worse and lower_is_worse modes."
+        },
+        "warning_limit": {
+          "type": "number",
+          "description": "Upper bound of WARNING zone for higher_is_worse and lower_is_worse modes."
+        },
+        "alarm_limit": {
+          "oneOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Optional explicit ALARM boundary beyond warning."
+        },
+        "normal_min": {
+          "type": "number",
+          "description": "Lower bound of NORMAL zone for range_based and bidirectional modes."
+        },
+        "normal_max": {
+          "type": "number",
+          "description": "Upper bound of NORMAL zone for range_based and bidirectional modes."
+        },
+        "warning_min": {
+          "type": "number",
+          "description": "Lower WARNING boundary for range_based and bidirectional modes."
+        },
+        "warning_max": {
+          "type": "number",
+          "description": "Upper WARNING boundary for range_based and bidirectional modes."
+        },
+        "alarm_min": {
+          "oneOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "alarm_max": {
+          "oneOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "unit": {
+          "type": "string",
+          "maxLength": 20,
+          "description": "Optional unit confirmation; must match parameter.unit when set."
+        },
+        "source": {
+          "type": "string",
+          "maxLength": 500,
+          "description": "Traceability reference for limit values (OEM, SOP, historical)."
+        },
+        "approval": {
+          "$ref": "#/$defs/ApprovalRecord"
+        },
+        "effective_date": {
+          "$ref": "#/$defs/ISODate",
+          "description": "Date these specific limits become effective."
+        },
+        "extensions": {
+          "$ref": "#/$defs/Extensions"
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "enabled": {
+                "const": true
+              },
+              "not_applicable": {
+                "const": false
+              }
+            },
+            "required": [
+              "enabled"
+            ]
+          },
+          "then": {
+            "anyOf": [
+              {
+                "required": [
+                  "normal_limit",
+                  "warning_limit"
+                ]
+              },
+              {
+                "required": [
+                  "normal_min",
+                  "normal_max"
+                ]
+              }
+            ]
+          }
+        }
+      ]
+    },
+    "RemarksConfig": {
+      "type": "object",
+      "description": "Per-parameter remarks behavior at submission time.",
+      "additionalProperties": false,
+      "properties": {
+        "enabled": {
+          "type": "boolean",
+          "default": false,
+          "description": "Allow operator remarks for this parameter."
+        },
+        "required_when_alarm": {
+          "type": "boolean",
+          "default": false,
+          "description": "Require a remark when classification result is ALARM."
+        },
+        "max_length": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 5000,
+          "default": 500
+        },
+        "extensions": {
+          "$ref": "#/$defs/Extensions"
+        }
+      }
+    },
+    "ParameterIntegration": {
+      "type": "object",
+      "description": "Protocol-specific integration mapping for Industry 4.0 ingest.",
+      "additionalProperties": false,
+      "properties": {
+        "plc_tag": {
+          "type": "string",
+          "maxLength": 256
+        },
+        "opc_ua": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "node_id": {
+              "type": "string",
+              "maxLength": 512
+            },
+            "namespace_index": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "server_id": {
+              "type": "string",
+              "maxLength": 64
+            }
+          }
+        },
+        "modbus": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "register": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "function_code": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 127
+            },
+            "scale": {
+              "type": "number"
+            },
+            "gateway_id": {
+              "type": "string",
+              "maxLength": 64
+            }
+          }
+        },
+        "scada": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "tag_name": {
+              "type": "string",
+              "maxLength": 256
+            },
+            "system_id": {
+              "type": "string",
+              "maxLength": 64
+            }
+          }
+        },
+        "historian": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "tag": {
+              "type": "string",
+              "maxLength": 256
+            },
+            "sampling_ms": {
+              "type": "integer",
+              "minimum": 1
+            },
+            "provider": {
+              "type": "string",
+              "maxLength": 64
+            }
+          }
+        },
+        "digital_twin": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "signal_id": {
+              "type": "string",
+              "maxLength": 128
+            },
+            "model_id": {
+              "type": "string",
+              "maxLength": 128
+            }
+          }
+        },
+        "ai": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "feature_id": {
+              "type": "string",
+              "maxLength": 128
+            },
+            "model_id": {
+              "type": "string",
+              "maxLength": 128
+            }
+          }
+        },
+        "extensions": {
+          "$ref": "#/$defs/Extensions"
+        }
+      }
+    },
+    "IntegrationDefaults": {
+      "type": "object",
+      "description": "Plant-wide Industry 4.0 integration defaults.",
+      "additionalProperties": false,
+      "properties": {
+        "plc_namespace": {
+          "type": "string",
+          "maxLength": 128,
+          "description": "Default prefix for PLC tag addresses."
+        },
+        "opc_ua": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "server_id": {
+              "type": "string",
+              "maxLength": 64
+            },
+            "endpoint_url": {
+              "type": "string",
+              "maxLength": 512
+            }
+          }
+        },
+        "modbus": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "gateway_id": {
+              "type": "string",
+              "maxLength": 64
+            },
+            "host": {
+              "type": "string",
+              "maxLength": 256
+            }
+          }
+        },
+        "historian": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "enabled": {
+              "type": "boolean"
+            },
+            "provider": {
+              "type": "string",
+              "maxLength": 64
+            }
+          }
+        },
+        "digital_twin": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "enabled": {
+              "type": "boolean"
+            },
+            "platform_id": {
+              "type": "string",
+              "maxLength": 64
+            }
+          }
+        },
+        "ai": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "anomaly_detection": {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "enabled": {
+                  "type": "boolean"
+                },
+                "model_registry": {
+                  "type": "string",
+                  "maxLength": 128
+                }
+              }
+            }
+          }
+        },
+        "extensions": {
+          "$ref": "#/$defs/Extensions"
+        }
+      }
+    },
+    "ParameterTypeDefinition": {
+      "type": "object",
+      "description": "Global defaults for a measurement type referenced by parameter.measurement_type.",
+      "additionalProperties": false,
+      "properties": {
+        "display_name": {
+          "type": "string",
+          "maxLength": 120
+        },
+        "default_unit": {
+          "type": "string",
+          "maxLength": 20
+        },
+        "default_validation": {
+          "$ref": "#/$defs/ValidationRules"
+        },
+        "default_classification_mode": {
+          "$ref": "#/$defs/ClassificationMode"
+        },
+        "default_decimal_precision": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 6
+        },
+        "description": {
+          "type": "string",
+          "maxLength": 500
+        },
+        "extensions": {
+          "$ref": "#/$defs/Extensions"
+        }
+      }
+    },
+    "ValidationHookDefinition": {
+      "type": "object",
+      "description": "Registry entry for a named custom validation hook.",
+      "additionalProperties": false,
+      "required": [
+        "description"
+      ],
+      "properties": {
+        "description": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 500
+        },
+        "version": {
+          "$ref": "#/$defs/SemVer"
+        },
+        "parameters_schema": {
+          "type": "object",
+          "description": "JSON Schema describing hook-specific configuration parameters.",
+          "additionalProperties": true
+        },
+        "extensions": {
+          "$ref": "#/$defs/Extensions"
+        }
+      }
+    },
+    "SheetTemplate": {
+      "type": "object",
+      "description": "Reusable section and group skeleton for similar equipment types.",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "name",
+        "sections"
+      ],
+      "properties": {
+        "id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 64
+        },
+        "name": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 200
+        },
+        "version": {
+          "$ref": "#/$defs/SemVer"
+        },
+        "description": {
+          "type": "string",
+          "maxLength": 500
+        },
+        "sections": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "$ref": "#/$defs/Section"
+          }
+        },
+        "metadata": {
+          "$ref": "#/$defs/Metadata"
+        },
+        "extensions": {
+          "$ref": "#/$defs/Extensions"
+        }
+      }
+    }
+  }
+}
