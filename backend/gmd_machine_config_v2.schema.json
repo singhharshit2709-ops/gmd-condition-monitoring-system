@@ -189,6 +189,11 @@
           "type": "string",
           "maxLength": 200
         },
+        "notes": {
+          "type": "string",
+          "maxLength": 2000,
+          "description": "Engineering notes, provisional threshold warnings, and operational guidance for this configuration file."
+        },
         "data_sources": {
           "type": "array",
           "items": {
@@ -717,29 +722,44 @@
       "additionalProperties": false,
       "required": [
         "key",
-        "label",
-        "full_label",
+        "display_short_label",
+        "display_full_label",
         "measurement_type",
         "unit",
         "display_order",
         "required",
-        "validation"
+        "validation",
+        "is_visible",
+        "editable",
+        "source"
       ],
       "properties": {
         "key": {
           "$ref": "#/$defs/ParameterKey"
         },
+        "display_short_label": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 80,
+          "description": "Short label beside the input (e.g. Vertical, DE Temperature)."
+        },
+        "display_full_label": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 200,
+          "description": "Full report and alarm label (e.g. Blower Drive End Vertical Vibration). Used for UI headers, reports, and Google Sheets Location column."
+        },
         "label": {
           "type": "string",
           "minLength": 1,
           "maxLength": 80,
-          "description": "Short display label shown beside the input."
+          "description": "Deprecated alias for display_short_label. Prefer display_short_label."
         },
         "full_label": {
           "type": "string",
           "minLength": 1,
           "maxLength": 200,
-          "description": "Composite label for alarms, reports, and Google Sheets Location column."
+          "description": "Deprecated alias for display_full_label. Prefer display_full_label."
         },
         "description": {
           "type": "string",
@@ -1048,6 +1068,11 @@
           "type": "boolean",
           "default": false,
           "description": "Record-only parameter with no applicable limits."
+        },
+        "provisional": {
+          "type": "boolean",
+          "default": false,
+          "description": "When true, limits are reference-only pending engineering approval. Must not be used for production classification until provisional is false and approval is recorded."
         },
         "normal_limit": {
           "type": "number",

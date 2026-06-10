@@ -1,0 +1,453 @@
+{
+  "$schema": "./gmd_machine_config_v2.schema.json",
+  "schema_id": "gmd.machine_config.v2",
+  "schema_version": "2.0.0",
+  "config_version": "1.0.1",
+  "metadata": {
+    "title": "GMD Condition Monitoring — V2 Plant Configuration",
+    "description": "V2 round sheet configuration for Neutral Glass GMD. Pilot release: MCB-1 only. All threshold values are PROVISIONAL pending engineering approval.",
+    "plant_site": "Neutral Glass — Kosamba",
+    "effective_from": "2026-07-01",
+    "prepared_by": "GMD Condition Monitoring V2",
+    "notes": "Threshold limits are reference-only (provisional: true). Do not use for production status classification until engineering sign-off.",
+    "tags": ["v2", "pilot", "mcb-1"],
+    "changelog": [
+      {
+        "version": "1.0.0",
+        "date": "2026-06-10",
+        "author": "GMD Condition Monitoring V2",
+        "summary": "Initial MCB-1 round sheet hierarchy."
+      },
+      {
+        "version": "1.0.1",
+        "date": "2026-06-10",
+        "author": "GMD Condition Monitoring V2",
+        "summary": "Added display_short_label, display_full_label, explicit is_visible/editable/source; marked thresholds provisional."
+      }
+    ]
+  },
+  "plants": [
+    {
+      "id": "neutral_glass_kosamba",
+      "name": "Neutral Glass — Kosamba",
+      "code": "NG-KSB",
+      "site_metadata": {
+        "country": "IN",
+        "region": "Gujarat",
+        "site_code": "Neutral Glass"
+      },
+      "schema_version": "2.0.0",
+      "effective_date": "2026-07-01",
+      "effective_until": null,
+      "approval": {
+        "approved_by": "Pending maintenance and engineering sign-off",
+        "approved_at": "2026-06-10T00:00:00+05:30",
+        "document_reference": "GMD-V2-MCB-1-PILOT"
+      },
+      "revision": {
+        "revision_number": 2,
+        "revision_date": "2026-06-10",
+        "revised_by": "GMD Condition Monitoring V2",
+        "change_summary": "Display labels and provisional threshold marking for MCB-1 pilot.",
+        "supersedes_config_version": "1.0.0"
+      },
+      "timezone": "Asia/Kolkata",
+      "locale": "en-IN",
+      "display_order": 1,
+      "active": true,
+      "categories": [
+        {
+          "id": "blowers",
+          "display_name": "Blowers",
+          "display_order": 1,
+          "description": "Rotating blower condition monitoring round sheets.",
+          "active": true,
+          "equipment": [
+            {
+              "id": "mcb_1",
+              "display_name": "MCB-1",
+              "category_id": "blowers",
+              "description": "Mold Cooling Blower (160 kW)",
+              "aliases": ["MCB1"],
+              "expected_reading_count": 16,
+              "minimum_required_count": 16,
+              "active": true,
+              "pilot": true,
+              "version": "1.0.1",
+              "metadata": {
+                "notes": "Mirrors physical MCB-1 maintenance round sheet. Thresholds are PROVISIONAL reference values only.",
+                "data_sources": ["Plant maintenance round sheet — MCB-1"]
+              },
+              "sections": [
+                {
+                  "id": "blower",
+                  "label": "Blower",
+                  "sheet_heading": "Blower",
+                  "display_order": 1,
+                  "description": "Blower assembly vibration and bearing temperature readings.",
+                  "active": true,
+                  "groups": [
+                    {
+                      "id": "drive_end",
+                      "label": "Drive End",
+                      "display_order": 1,
+                      "collapsible": true,
+                      "default_expanded": true,
+                      "layout": "vibration_triplet",
+                      "active": true,
+                      "parameters": [
+                        {
+                          "key": "blower_drive_end_vertical",
+                          "display_short_label": "Vertical",
+                          "display_full_label": "Blower Drive End Vertical Vibration",
+                          "measurement_type": "vibration_velocity",
+                          "unit": "mm/s",
+                          "display_order": 1,
+                          "required": true,
+                          "is_visible": true,
+                          "editable": true,
+                          "source": "manual",
+                          "validation": { "value_type": "number", "min": 0, "decimal_precision": 2, "step": 0.01, "allow_negative": false },
+                          "thresholds": { "enabled": true, "provisional": true, "normal_limit": 6.0, "warning_limit": 10.0, "source": "PROVISIONAL — GT machine_config.json MCB1 reference only. Not approved for production classification." },
+                          "classification_mode": "higher_is_worse",
+                          "decimal_precision": 2
+                        },
+                        {
+                          "key": "blower_drive_end_horizontal",
+                          "display_short_label": "Horizontal",
+                          "display_full_label": "Blower Drive End Horizontal Vibration",
+                          "measurement_type": "vibration_velocity",
+                          "unit": "mm/s",
+                          "display_order": 2,
+                          "required": true,
+                          "is_visible": true,
+                          "editable": true,
+                          "source": "manual",
+                          "validation": { "value_type": "number", "min": 0, "decimal_precision": 2, "step": 0.01, "allow_negative": false },
+                          "thresholds": { "enabled": true, "provisional": true, "normal_limit": 6.0, "warning_limit": 10.0, "source": "PROVISIONAL — GT machine_config.json MCB1 reference only. Not approved for production classification." },
+                          "classification_mode": "higher_is_worse",
+                          "decimal_precision": 2
+                        },
+                        {
+                          "key": "blower_drive_end_axial",
+                          "display_short_label": "Axial",
+                          "display_full_label": "Blower Drive End Axial Vibration",
+                          "measurement_type": "vibration_velocity",
+                          "unit": "mm/s",
+                          "display_order": 3,
+                          "required": true,
+                          "is_visible": true,
+                          "editable": true,
+                          "source": "manual",
+                          "validation": { "value_type": "number", "min": 0, "decimal_precision": 2, "step": 0.01, "allow_negative": false },
+                          "thresholds": { "enabled": true, "provisional": true, "normal_limit": 6.0, "warning_limit": 10.0, "source": "PROVISIONAL — GT machine_config.json MCB1 reference only. Not approved for production classification." },
+                          "classification_mode": "higher_is_worse",
+                          "decimal_precision": 2
+                        }
+                      ]
+                    },
+                    {
+                      "id": "non_drive_end",
+                      "label": "Non Drive End",
+                      "display_order": 2,
+                      "collapsible": true,
+                      "default_expanded": true,
+                      "layout": "vibration_triplet",
+                      "active": true,
+                      "parameters": [
+                        {
+                          "key": "blower_non_drive_end_vertical",
+                          "display_short_label": "Vertical",
+                          "display_full_label": "Blower Non Drive End Vertical Vibration",
+                          "measurement_type": "vibration_velocity",
+                          "unit": "mm/s",
+                          "display_order": 1,
+                          "required": true,
+                          "is_visible": true,
+                          "editable": true,
+                          "source": "manual",
+                          "validation": { "value_type": "number", "min": 0, "decimal_precision": 2, "step": 0.01, "allow_negative": false },
+                          "thresholds": { "enabled": true, "provisional": true, "normal_limit": 6.0, "warning_limit": 10.0, "source": "PROVISIONAL — GT machine_config.json MCB1 reference only. Not approved for production classification." },
+                          "classification_mode": "higher_is_worse",
+                          "decimal_precision": 2
+                        },
+                        {
+                          "key": "blower_non_drive_end_horizontal",
+                          "display_short_label": "Horizontal",
+                          "display_full_label": "Blower Non Drive End Horizontal Vibration",
+                          "measurement_type": "vibration_velocity",
+                          "unit": "mm/s",
+                          "display_order": 2,
+                          "required": true,
+                          "is_visible": true,
+                          "editable": true,
+                          "source": "manual",
+                          "validation": { "value_type": "number", "min": 0, "decimal_precision": 2, "step": 0.01, "allow_negative": false },
+                          "thresholds": { "enabled": true, "provisional": true, "normal_limit": 6.0, "warning_limit": 10.0, "source": "PROVISIONAL — GT machine_config.json MCB1 reference only. Not approved for production classification." },
+                          "classification_mode": "higher_is_worse",
+                          "decimal_precision": 2
+                        },
+                        {
+                          "key": "blower_non_drive_end_axial",
+                          "display_short_label": "Axial",
+                          "display_full_label": "Blower Non Drive End Axial Vibration",
+                          "measurement_type": "vibration_velocity",
+                          "unit": "mm/s",
+                          "display_order": 3,
+                          "required": true,
+                          "is_visible": true,
+                          "editable": true,
+                          "source": "manual",
+                          "validation": { "value_type": "number", "min": 0, "decimal_precision": 2, "step": 0.01, "allow_negative": false },
+                          "thresholds": { "enabled": true, "provisional": true, "normal_limit": 6.0, "warning_limit": 10.0, "source": "PROVISIONAL — GT machine_config.json MCB1 reference only. Not approved for production classification." },
+                          "classification_mode": "higher_is_worse",
+                          "decimal_precision": 2
+                        }
+                      ]
+                    },
+                    {
+                      "id": "de_temperature",
+                      "label": "DE Temperature",
+                      "display_order": 3,
+                      "collapsible": false,
+                      "default_expanded": true,
+                      "layout": "default",
+                      "active": true,
+                      "parameters": [
+                        {
+                          "key": "blower_de_temperature",
+                          "display_short_label": "DE Temperature",
+                          "display_full_label": "Blower DE Temperature",
+                          "measurement_type": "temperature",
+                          "unit": "°C",
+                          "display_order": 1,
+                          "required": true,
+                          "is_visible": true,
+                          "editable": true,
+                          "source": "manual",
+                          "validation": { "value_type": "number", "min": 0, "decimal_precision": 1, "step": 0.1, "allow_negative": false },
+                          "thresholds": { "enabled": true, "provisional": true, "normal_limit": 60, "warning_limit": 75, "source": "PROVISIONAL — GT machine_config.json MCB1 reference only. Not approved for production classification." },
+                          "classification_mode": "higher_is_worse",
+                          "decimal_precision": 1
+                        }
+                      ]
+                    },
+                    {
+                      "id": "nde_temperature",
+                      "label": "NDE Temperature",
+                      "display_order": 4,
+                      "collapsible": false,
+                      "default_expanded": true,
+                      "layout": "default",
+                      "active": true,
+                      "parameters": [
+                        {
+                          "key": "blower_nde_temperature",
+                          "display_short_label": "NDE Temperature",
+                          "display_full_label": "Blower NDE Temperature",
+                          "measurement_type": "temperature",
+                          "unit": "°C",
+                          "display_order": 1,
+                          "required": true,
+                          "is_visible": true,
+                          "editable": true,
+                          "source": "manual",
+                          "validation": { "value_type": "number", "min": 0, "decimal_precision": 1, "step": 0.1, "allow_negative": false },
+                          "thresholds": { "enabled": true, "provisional": true, "normal_limit": 60, "warning_limit": 75, "source": "PROVISIONAL — GT machine_config.json MCB1 reference only. Not approved for production classification." },
+                          "classification_mode": "higher_is_worse",
+                          "decimal_precision": 1
+                        }
+                      ]
+                    }
+                  ]
+                },
+                {
+                  "id": "motor",
+                  "label": "Motor",
+                  "sheet_heading": "Motor",
+                  "display_order": 2,
+                  "description": "Motor vibration and bearing temperature readings.",
+                  "active": true,
+                  "groups": [
+                    {
+                      "id": "drive_end",
+                      "label": "Drive End",
+                      "display_order": 1,
+                      "collapsible": true,
+                      "default_expanded": true,
+                      "layout": "vibration_triplet",
+                      "active": true,
+                      "parameters": [
+                        {
+                          "key": "motor_drive_end_vertical",
+                          "display_short_label": "Vertical",
+                          "display_full_label": "Motor Drive End Vertical Vibration",
+                          "measurement_type": "vibration_velocity",
+                          "unit": "mm/s",
+                          "display_order": 1,
+                          "required": true,
+                          "is_visible": true,
+                          "editable": true,
+                          "source": "manual",
+                          "validation": { "value_type": "number", "min": 0, "decimal_precision": 2, "step": 0.01, "allow_negative": false },
+                          "thresholds": { "enabled": true, "provisional": true, "normal_limit": 6.0, "warning_limit": 10.0, "source": "PROVISIONAL — GT machine_config.json MCB1 reference only. Not approved for production classification." },
+                          "classification_mode": "higher_is_worse",
+                          "decimal_precision": 2
+                        },
+                        {
+                          "key": "motor_drive_end_horizontal",
+                          "display_short_label": "Horizontal",
+                          "display_full_label": "Motor Drive End Horizontal Vibration",
+                          "measurement_type": "vibration_velocity",
+                          "unit": "mm/s",
+                          "display_order": 2,
+                          "required": true,
+                          "is_visible": true,
+                          "editable": true,
+                          "source": "manual",
+                          "validation": { "value_type": "number", "min": 0, "decimal_precision": 2, "step": 0.01, "allow_negative": false },
+                          "thresholds": { "enabled": true, "provisional": true, "normal_limit": 6.0, "warning_limit": 10.0, "source": "PROVISIONAL — GT machine_config.json MCB1 reference only. Not approved for production classification." },
+                          "classification_mode": "higher_is_worse",
+                          "decimal_precision": 2
+                        },
+                        {
+                          "key": "motor_drive_end_axial",
+                          "display_short_label": "Axial",
+                          "display_full_label": "Motor Drive End Axial Vibration",
+                          "measurement_type": "vibration_velocity",
+                          "unit": "mm/s",
+                          "display_order": 3,
+                          "required": true,
+                          "is_visible": true,
+                          "editable": true,
+                          "source": "manual",
+                          "validation": { "value_type": "number", "min": 0, "decimal_precision": 2, "step": 0.01, "allow_negative": false },
+                          "thresholds": { "enabled": true, "provisional": true, "normal_limit": 6.0, "warning_limit": 10.0, "source": "PROVISIONAL — GT machine_config.json MCB1 reference only. Not approved for production classification." },
+                          "classification_mode": "higher_is_worse",
+                          "decimal_precision": 2
+                        }
+                      ]
+                    },
+                    {
+                      "id": "non_drive_end",
+                      "label": "Non Drive End",
+                      "display_order": 2,
+                      "collapsible": true,
+                      "default_expanded": true,
+                      "layout": "vibration_triplet",
+                      "active": true,
+                      "parameters": [
+                        {
+                          "key": "motor_non_drive_end_vertical",
+                          "display_short_label": "Vertical",
+                          "display_full_label": "Motor Non Drive End Vertical Vibration",
+                          "measurement_type": "vibration_velocity",
+                          "unit": "mm/s",
+                          "display_order": 1,
+                          "required": true,
+                          "is_visible": true,
+                          "editable": true,
+                          "source": "manual",
+                          "validation": { "value_type": "number", "min": 0, "decimal_precision": 2, "step": 0.01, "allow_negative": false },
+                          "thresholds": { "enabled": true, "provisional": true, "normal_limit": 6.0, "warning_limit": 10.0, "source": "PROVISIONAL — GT machine_config.json MCB1 reference only. Not approved for production classification." },
+                          "classification_mode": "higher_is_worse",
+                          "decimal_precision": 2
+                        },
+                        {
+                          "key": "motor_non_drive_end_horizontal",
+                          "display_short_label": "Horizontal",
+                          "display_full_label": "Motor Non Drive End Horizontal Vibration",
+                          "measurement_type": "vibration_velocity",
+                          "unit": "mm/s",
+                          "display_order": 2,
+                          "required": true,
+                          "is_visible": true,
+                          "editable": true,
+                          "source": "manual",
+                          "validation": { "value_type": "number", "min": 0, "decimal_precision": 2, "step": 0.01, "allow_negative": false },
+                          "thresholds": { "enabled": true, "provisional": true, "normal_limit": 6.0, "warning_limit": 10.0, "source": "PROVISIONAL — GT machine_config.json MCB1 reference only. Not approved for production classification." },
+                          "classification_mode": "higher_is_worse",
+                          "decimal_precision": 2
+                        },
+                        {
+                          "key": "motor_non_drive_end_axial",
+                          "display_short_label": "Axial",
+                          "display_full_label": "Motor Non Drive End Axial Vibration",
+                          "measurement_type": "vibration_velocity",
+                          "unit": "mm/s",
+                          "display_order": 3,
+                          "required": true,
+                          "is_visible": true,
+                          "editable": true,
+                          "source": "manual",
+                          "validation": { "value_type": "number", "min": 0, "decimal_precision": 2, "step": 0.01, "allow_negative": false },
+                          "thresholds": { "enabled": true, "provisional": true, "normal_limit": 6.0, "warning_limit": 10.0, "source": "PROVISIONAL — GT machine_config.json MCB1 reference only. Not approved for production classification." },
+                          "classification_mode": "higher_is_worse",
+                          "decimal_precision": 2
+                        }
+                      ]
+                    },
+                    {
+                      "id": "de_temperature",
+                      "label": "DE Temperature",
+                      "display_order": 3,
+                      "collapsible": false,
+                      "default_expanded": true,
+                      "layout": "default",
+                      "active": true,
+                      "parameters": [
+                        {
+                          "key": "motor_de_temperature",
+                          "display_short_label": "DE Temperature",
+                          "display_full_label": "Motor DE Temperature",
+                          "measurement_type": "temperature",
+                          "unit": "°C",
+                          "display_order": 1,
+                          "required": true,
+                          "is_visible": true,
+                          "editable": true,
+                          "source": "manual",
+                          "validation": { "value_type": "number", "min": 0, "decimal_precision": 1, "step": 0.1, "allow_negative": false },
+                          "thresholds": { "enabled": true, "provisional": true, "normal_limit": 60, "warning_limit": 75, "source": "PROVISIONAL — GT machine_config.json MCB1 reference only. Not approved for production classification." },
+                          "classification_mode": "higher_is_worse",
+                          "decimal_precision": 1
+                        }
+                      ]
+                    },
+                    {
+                      "id": "nde_temperature",
+                      "label": "NDE Temperature",
+                      "display_order": 4,
+                      "collapsible": false,
+                      "default_expanded": true,
+                      "layout": "default",
+                      "active": true,
+                      "parameters": [
+                        {
+                          "key": "motor_nde_temperature",
+                          "display_short_label": "NDE Temperature",
+                          "display_full_label": "Motor NDE Temperature",
+                          "measurement_type": "temperature",
+                          "unit": "°C",
+                          "display_order": 1,
+                          "required": true,
+                          "is_visible": true,
+                          "editable": true,
+                          "source": "manual",
+                          "validation": { "value_type": "number", "min": 0, "decimal_precision": 1, "step": 0.1, "allow_negative": false },
+                          "thresholds": { "enabled": true, "provisional": true, "normal_limit": 60, "warning_limit": 75, "source": "PROVISIONAL — GT machine_config.json MCB1 reference only. Not approved for production classification." },
+                          "classification_mode": "higher_is_worse",
+                          "decimal_precision": 1
+                        }
+                      ]
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}
