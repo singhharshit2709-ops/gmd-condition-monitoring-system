@@ -154,3 +154,52 @@ class GMDGoogleSheetsService:
             "success": True,
             "rows_appended": len(rows),
         }
+
+    def append_v2_readings(
+        self,
+        category: str,
+        equipment: str,
+        readings: Dict[str, float],
+        parameter_locations: Dict[str, str],
+        verified_by: str = "",
+        remarks: str = "",
+        entry_source: str = "Web",
+    ) -> Dict[str, Any]:
+        """
+        Persist V2 round sheet readings without V1 config validation.
+        Parameter column stores the stable machine key; Location stores display_full_label.
+        """
+        rows: list[list[Any]] = []
+        timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+
+        for parameter_key, value in readings.items():
+            rows.append([
+                timestamp,
+                category,
+                equipment,
+                parameter_key,
+                parameter_locations.get(parameter_key, ""),
+                float(value),
+                "NORMAL",
+                verified_by,
+                remarks,
+                entry_source,
+            ])
+
+        if rows:
+            self.sheet.append_rows(
+                rows,
+                value_input_option="USER_ENTERED",
+            )
+            self.clear_cache()
+            logger.info(
+                "Successfully appended %d V2 reading row(s) for equipment=%s.",
+                len(rows),
+                equipment,
+            )
+
+        return {
+            "success": True,
+            "rows_appended": len(rows),
+            "timestamp": timestamp,
+        }

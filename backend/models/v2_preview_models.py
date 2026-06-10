@@ -32,3 +32,25 @@ class V2PreviewResponse(BaseModel):
     missing_parameters: List[MissingParameterDetail]
     invalid_parameters: List[InvalidParameterDetail]
     validation_message: str
+
+
+class V2SubmitRequest(V2PreviewRequest):
+    verified_by: str = ""
+    remarks: str = ""
+    entry_source: str = "Web"
+
+    @field_validator("verified_by", "remarks", "entry_source", mode="before")
+    @classmethod
+    def strip_optional_text(cls, value: Any) -> Any:
+        if isinstance(value, str):
+            return value.strip()
+        return value
+
+
+class V2SubmitResponse(BaseModel):
+    success: bool = True
+    equipment: str
+    category: str
+    reading_count: int
+    submitted_at: str
+    message: str
