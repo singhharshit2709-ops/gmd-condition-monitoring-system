@@ -47,6 +47,8 @@ from config_resolve import (
 )
 from services.sheets_config import (
     GMD_SHEET_HEADERS,
+    detect_sheet_schema,
+    ensure_gmd_header_row,
     get_spreadsheet_id,
     get_worksheet_name,
     is_sheets_enabled,
@@ -54,6 +56,7 @@ from services.sheets_config import (
     open_spreadsheet,
     sheets_config_summary,
 )
+from services.sheets_row_model import SheetSchema, is_gmd_readings_schema
 
 # Load environment variables early
 load_dotenv()
@@ -615,14 +618,17 @@ def init_google_sheets() -> None:
             logger.info("Google Sheets — created %r worksheet with headers", worksheet_title)
 
         row1 = worksheet.row_values(1)
-        gmd_header = [str(cell).strip() for cell in row1[: len(GMD_SHEET_HEADERS)]]
-        if gmd_header == GMD_SHEET_HEADERS:
+        gmd_schema = detect_sheet_schema([str(cell).strip() for cell in row1])
+        if is_gmd_readings_schema(gmd_schema):
+            if gmd_schema != SheetSchema.CANONICAL:
+                ensure_gmd_header_row(worksheet)
+                logger.info(
+                    "Worksheet %r header row upgraded from %s to canonical GMD layout",
+                    worksheet_title,
+                    gmd_schema.value,
+                )
             _sheets_worksheet = worksheet
             _sheets_enabled = True
-            logger.info(
-                "Worksheet %r uses GMD 10-column layout — skipping GT header repair",
-                worksheet_title,
-            )
             logger.info(
                 "Google Sheets ready (sheet_id=%s, worksheet=%r, credential_source=%s, mode=gmd)",
                 sheet_id,

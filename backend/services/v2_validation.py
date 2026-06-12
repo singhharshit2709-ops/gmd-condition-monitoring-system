@@ -29,6 +29,7 @@ class V2ValidationOutcome:
     equipment_name: str | None = None
     normalized_readings: dict[str, float] | None = None
     parameter_locations: dict[str, str] | None = None
+    parameter_units: dict[str, str] | None = None
 
 
 def is_numeric_value(value: Any) -> bool:
@@ -195,6 +196,10 @@ def validate_v2_submission(payload: V2PreviewRequest) -> V2ValidationOutcome:
         key: allowed_by_key[key].get("display_full_label", "")
         for key in normalized_readings
     }
+    parameter_units = {
+        key: allowed_by_key[key].get("unit", "")
+        for key in normalized_readings
+    }
 
     return V2ValidationOutcome(
         preview=preview,
@@ -202,4 +207,5 @@ def validate_v2_submission(payload: V2PreviewRequest) -> V2ValidationOutcome:
         equipment_name=equipment.get("display_name", payload.equipment),
         normalized_readings=normalized_readings,
         parameter_locations=parameter_locations,
+        parameter_units=parameter_units,
     )

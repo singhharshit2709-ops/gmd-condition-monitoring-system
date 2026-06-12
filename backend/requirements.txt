@@ -10,6 +10,7 @@ pydantic==2.12.5
 gspread==6.2.1
 google-auth==2.49.1
 google-auth-oauthlib==1.3.1
+google-api-python-client==2.187.0
 
 # Image Processing (Photo Watermark)
 pillow==12.1.1

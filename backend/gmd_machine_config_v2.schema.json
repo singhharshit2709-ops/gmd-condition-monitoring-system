@@ -489,6 +489,12 @@
           "type": "boolean",
           "default": true
         },
+        "navigation_mode": {
+          "type": "string",
+          "enum": ["tank_equipment", "utility_tag"],
+          "default": "tank_equipment",
+          "description": "tank_equipment: area → equipment. utility_tag: area → equipment kind → tag no."
+        },
         "metadata": {
           "$ref": "#/$defs/Metadata"
         },
@@ -621,6 +627,18 @@
           "type": "integer",
           "minimum": 0,
           "description": "Sort order within an area equipment selector."
+        },
+        "equipment_kind": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 120,
+          "description": "Utility round sheet equipment type label (e.g. Screw Compressor)."
+        },
+        "tag_no": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 120,
+          "description": "Utility round sheet Tag No shown in navigation and Google Sheets Equipment column."
         },
         "version": {
           "$ref": "#/$defs/SemVer",

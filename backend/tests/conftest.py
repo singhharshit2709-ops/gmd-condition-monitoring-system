@@ -15,6 +15,7 @@ from fastapi.testclient import TestClient
 
 from routes import dashboard as dashboard_module
 from routes.dashboard import get_sheets_service
+from routes.v2_preview import get_drive_media_service
 from server import app
 from tests.fixtures.mock_sheets_service import MockGMDGoogleSheetsService
 from tests.fixtures.sheet_data import (
@@ -27,7 +28,9 @@ from tests.fixtures.sheet_data import (
     build_data_set_g,
 )
 
-CONFIGURED_EQUIPMENT_TOTAL = 25
+from gmd_config_v2 import get_total_equipment_count
+
+CONFIGURED_EQUIPMENT_TOTAL = get_total_equipment_count()
 
 
 def reset_dashboard_state() -> None:
@@ -51,9 +54,11 @@ def _isolate_dashboard_state():
     """Reset caches and dependency overrides before and after every test."""
     app.dependency_overrides.clear()
     reset_dashboard_state()
+    get_drive_media_service.cache_clear()
     yield
     app.dependency_overrides.clear()
     reset_dashboard_state()
+    get_drive_media_service.cache_clear()
 
 
 @pytest.fixture

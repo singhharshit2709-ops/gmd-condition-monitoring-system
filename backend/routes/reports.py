@@ -36,8 +36,8 @@ def get_report_readings(
     start_date: Optional[str] = Query(None),
     end_date: Optional[str] = Query(None),
 ):
-    rows = fetch_and_clean_data(service)
-    parsed_rows = [parse_row(row) for row in rows]
+    headers, data_rows = fetch_and_clean_data(service)
+    parsed_rows = [parse_row(row, headers) for row in data_rows]
 
     try:
         parsed_rows.sort(

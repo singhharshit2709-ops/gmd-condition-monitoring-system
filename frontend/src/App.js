@@ -2,8 +2,7 @@ import "@/App.css";
 import { BrowserRouter, Routes, Route, Link, useLocation } from "react-router-dom";
 import ConditionMonitoring from "@/pages/ConditionMonitoring";
 import Dashboard from "@/pages/Dashboard";
-import BulkEntry from "@/pages/BulkEntry";
-import AddReadingV2 from "@/pages/AddReadingV2";
+import AddReading from "@/pages/AddReading";
 import Reports from "@/pages/Reports";
 import TrendsAnalytics from "@/pages/TrendsAnalytics"; 
 
@@ -15,7 +14,6 @@ const Navigation = () => {
   const navItems = [
   { path: "/", label: "Dashboard", icon: GearSix },
   { path: "/add-reading", label: "Add Reading", icon: ListChecks },
-  { path: "/add-reading-v2", label: "Add Reading V2", icon: ListChecks },
   { path: "/equipment-monitoring", label: "Equipment Monitoring", icon: ChartLine },
   { path: "/reports", label: "Reports", icon: ChartLine },
   { path: "/trends-analytics", label: "Trends & Analytics", icon: ChartLine },
@@ -69,8 +67,7 @@ function App() {
         <Navigation />
         <Routes>
           <Route path="/" element={<Dashboard />} />
-          <Route path="/add-reading" element={<BulkEntry />} />
-          <Route path="/add-reading-v2" element={<AddReadingV2 />} />
+          <Route path="/add-reading" element={<AddReading />} />
           <Route path="/equipment-monitoring" element={<ConditionMonitoring />} />
           <Route path="/reports" element={<Reports />} />
           <Route path="/trends-analytics" element={<TrendsAnalytics />} /> 

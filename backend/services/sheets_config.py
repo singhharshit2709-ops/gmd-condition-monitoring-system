@@ -1,17 +1,8 @@
 """
 Shared Google Sheets configuration for GMD Dashboard and legacy GT compatibility.
 
-Canonical environment variables (use these everywhere):
-  GOOGLE_SHEETS_ENABLED          - "true" to enable Sheets integration
-  GOOGLE_SHEET_ID                - Spreadsheet ID
-  GOOGLE_SHEET_WORKSHEET         - Worksheet tab name (default: Readings)
-  GOOGLE_SERVICE_ACCOUNT_JSON    - Service account JSON string (preferred on Render)
-  GOOGLE_SERVICE_ACCOUNT_FILE    - Path to service account JSON file (local dev)
-
-Legacy aliases (read-only fallbacks — do not use in new deployments):
-  GOOGLE_SPREADSHEET_ID          - alias for GOOGLE_SHEET_ID
-  GOOGLE_WORKSHEET               - alias for GOOGLE_SHEET_WORKSHEET
-  GOOGLE_CREDENTIALS_FILE        - alias for GOOGLE_SERVICE_ACCOUNT_FILE
+Row schema, building, and parsing live in services.sheets_row_model.
+This module handles credentials, worksheet access, and header initialization.
 """
 
 from __future__ import annotations
@@ -24,27 +15,60 @@ from typing import Any, Tuple
 
 from gspread.exceptions import WorksheetNotFound
 
+from services.sheets_row_model import (
+    GMD_SHEET_HEADERS,
+    GMD_SHEET_HEADERS_LEGACY,
+    GMD_SHEET_HEADERS_LEGACY_V2,
+    GMD_SHEET_MEDIA_HEADERS,
+    ReadingRowRecord,
+    build_gmd_row,
+    build_reading_row,
+    detect_sheet_schema,
+    extract_reading_rows_from_worksheet,
+    is_canonical_reading_slice,
+    is_modern_gmd_header,
+    parse_gmd_sheet_row,
+    parse_reading_row,
+    to_dashboard_api_row,
+)
+from services.sheets_row_model import SheetSchema  # noqa: F401 — re-export
+
 logger = logging.getLogger("gmd_condition_monitoring.sheets_config")
 
 _BACKEND_DIR = Path(__file__).resolve().parent.parent
 
-GMD_SHEET_HEADERS = [
-    "Timestamp",
-    "Category",
-    "Equipment",
-    "Parameter",
-    "Location",
-    "Value",
-    "Status",
-    "Verified By",
-    "Remarks",
-    "Entry Source",
-]
+# Re-export legacy names used across the codebase
+GMD_SHEET_HEADERS_MEDIA_EXTENDED = GMD_SHEET_HEADERS_LEGACY + GMD_SHEET_MEDIA_HEADERS
 
 SCOPES = [
     "https://www.googleapis.com/auth/spreadsheets",
     "https://www.googleapis.com/auth/drive",
 ]
+
+__all__ = [
+    "GMD_SHEET_HEADERS",
+    "GMD_SHEET_HEADERS_LEGACY",
+    "GMD_SHEET_HEADERS_LEGACY_V2",
+    "GMD_SHEET_HEADERS_MEDIA_EXTENDED",
+    "GMD_SHEET_MEDIA_HEADERS",
+    "ReadingRowRecord",
+    "SheetSchema",
+    "build_gmd_row",
+    "build_reading_row",
+    "detect_sheet_schema",
+    "ensure_gmd_header_row",
+    "header_column_map",
+    "is_modern_gmd_header",
+    "parse_gmd_sheet_row",
+    "parse_reading_row",
+    "to_dashboard_api_row",
+]
+
+
+def header_column_map(headers: list[str]) -> dict[str, int]:
+    from services.sheets_row_model import header_column_map as _map
+
+    return _map(headers)
 
 
 def is_sheets_enabled() -> bool:
@@ -52,7 +76,6 @@ def is_sheets_enabled() -> bool:
 
 
 def get_spreadsheet_id() -> str:
-    """Return spreadsheet ID from canonical or legacy env var."""
     sheet_id = os.environ.get("GOOGLE_SHEET_ID", "").strip()
     if not sheet_id:
         sheet_id = os.environ.get("GOOGLE_SPREADSHEET_ID", "").strip()
@@ -60,7 +83,6 @@ def get_spreadsheet_id() -> str:
 
 
 def get_worksheet_name(default: str = "Readings") -> str:
-    """Return worksheet tab name from canonical or legacy env var."""
     worksheet = os.environ.get("GOOGLE_SHEET_WORKSHEET", "").strip()
     if not worksheet:
         worksheet = os.environ.get("GOOGLE_WORKSHEET", "").strip()
@@ -94,11 +116,6 @@ def _resolve_credentials_file_path(raw_path: str) -> str:
 
 
 def load_service_account_credentials() -> Tuple[Any, str]:
-    """
-    Load Google service account credentials.
-    Returns (credentials, source_description).
-    Raises RuntimeError when credentials cannot be resolved.
-    """
     try:
         from google.oauth2.service_account import Credentials
     except ImportError as exc:
@@ -153,7 +170,6 @@ def get_or_create_worksheet(
     rows: int = 10000,
     cols: int | None = None,
 ) -> Any:
-    """Open worksheet by name, creating it if missing."""
     title = worksheet_name or get_worksheet_name()
     column_count = cols or len(GMD_SHEET_HEADERS)
     try:
@@ -163,24 +179,105 @@ def get_or_create_worksheet(
         return spreadsheet.add_worksheet(title=title, rows=rows, cols=column_count)
 
 
-def ensure_gmd_header_row(worksheet: Any) -> None:
-    """Ensure row 1 contains the GMD 10-column header."""
-    row1 = worksheet.row_values(1)
-    normalized = [str(cell).strip() for cell in row1[: len(GMD_SHEET_HEADERS)]]
-    if normalized == GMD_SHEET_HEADERS:
-        return
+def _column_letter(index: int) -> str:
+    letters = ""
+    while index:
+        index, remainder = divmod(index - 1, 26)
+        letters = chr(65 + remainder) + letters
+    return letters
 
-    end_col = chr(ord("A") + len(GMD_SHEET_HEADERS) - 1)
+
+def ensure_gmd_header_row(worksheet: Any) -> None:
+    """Ensure row 1 uses the canonical snake_case GMD header layout."""
+    row1 = worksheet.row_values(1)
+    normalized = [str(cell).strip() for cell in row1]
+    target_len = len(GMD_SHEET_HEADERS)
+
+    prefix = normalized[:target_len]
+    while len(prefix) < target_len:
+        prefix.append("")
+
+    if prefix != GMD_SHEET_HEADERS:
+        schema = detect_sheet_schema(normalized)
+        end_col = _column_letter(target_len)
+        worksheet.update(
+            [GMD_SHEET_HEADERS],
+            range_name=f"A1:{end_col}1",
+            value_input_option="RAW",
+        )
+        logger.info(
+            "GMD worksheet header row upgraded from %s to canonical layout A1:%s1 (%d columns)",
+            schema.value,
+            end_col,
+            target_len,
+        )
+
+
+def worksheet_has_horizontal_drift(all_values: list[list[str]]) -> bool:
+    """Detect rows written outside column A due to widened worksheet tables."""
+    if len(all_values) <= 1:
+        return False
+
+    width = len(GMD_SHEET_HEADERS)
+    for row in all_values[1:]:
+        if not row or not any(str(cell).strip() for cell in row):
+            continue
+
+        if is_canonical_reading_slice(row):
+            continue
+
+        max_start = max(0, len(row) - width)
+        for start in range(1, max_start + 1):
+            window = list(row[start : start + width])
+            if len(window) < width:
+                window.extend([""] * (width - len(window)))
+            if is_canonical_reading_slice(window):
+                return True
+    return False
+
+
+def normalize_readings_worksheet(worksheet: Any) -> dict[str, int]:
+    """
+    Rebuild the Readings worksheet with canonical A:Q layout.
+
+    Recovers horizontally drifted rows and trims excess worksheet columns so
+    future inserts always start at column A.
+    """
+    all_values = worksheet.get_all_values()
+    canonical_rows = extract_reading_rows_from_worksheet(all_values)
+    target_len = len(GMD_SHEET_HEADERS)
+    end_col = _column_letter(target_len)
+    all_rows = [list(GMD_SHEET_HEADERS)] + canonical_rows
+    total_rows = len(all_rows)
+
+    worksheet.resize(
+        rows=max(total_rows + 100, 1000),
+        cols=target_len,
+    )
     worksheet.update(
-        [GMD_SHEET_HEADERS],
-        range_name=f"A1:{end_col}1",
+        all_rows,
+        range_name=f"A1:{end_col}{total_rows}",
         value_input_option="RAW",
     )
-    logger.info("GMD worksheet header row written to A1:%s1", end_col)
+
+    current_rows = worksheet.row_count
+    if current_rows > total_rows:
+        worksheet.delete_rows(total_rows + 1, current_rows)
+
+    logger.info(
+        "GMD worksheet normalized: recovered_rows=%d total_rows=%d columns=%d",
+        len(canonical_rows),
+        total_rows,
+        target_len,
+    )
+    return {
+        "recovered_rows": len(canonical_rows),
+        "total_rows": total_rows,
+        "columns": target_len,
+    }
 
 
 def sheets_config_summary() -> dict[str, str]:
-    """Non-secret snapshot of resolved Sheets configuration (for health/debug)."""
     creds_source = "not loaded"
     try:
         _, creds_source = load_service_account_credentials()

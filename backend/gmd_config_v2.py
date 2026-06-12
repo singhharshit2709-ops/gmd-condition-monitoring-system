@@ -76,3 +76,64 @@ def get_expected_reading_count(equipment: dict[str, Any], parameters: list[dict[
     if isinstance(equipment.get("expected_reading_count"), int):
         return equipment["expected_reading_count"]
     return sum(1 for param in parameters if param.get("required"))
+
+
+def collect_active_equipment(config: dict[str, Any] | None = None) -> list[dict[str, Any]]:
+    """Return all active equipment entries across plants and categories."""
+    cfg = config or load_gmd_config_v2()
+    entries: list[dict[str, Any]] = []
+    for plant in cfg.get("plants") or []:
+        if plant.get("active") is False:
+            continue
+        for category in plant.get("categories") or []:
+            if category.get("active") is False:
+                continue
+            for equipment in category.get("equipment") or []:
+                if equipment.get("active") is False:
+                    continue
+                entries.append(
+                    {
+                        **equipment,
+                        "category_id": category.get("id", ""),
+                        "category_display_name": category.get("display_name", ""),
+                        "plant_id": plant.get("id", ""),
+                    }
+                )
+    return entries
+
+
+def get_total_equipment_count(config: dict[str, Any] | None = None) -> int:
+    """Count all active V2 equipment instances."""
+    custom = (config or load_gmd_config_v2()).get("metadata", {}).get("custom", {})
+    registry = custom.get("equipment_registry")
+    if isinstance(registry, dict) and isinstance(registry.get("total_equipment"), int):
+        return registry["total_equipment"]
+    return len(collect_active_equipment(config))
+
+
+def get_equipment_count_by_area(config: dict[str, Any] | None = None) -> dict[str, int]:
+    """Return equipment instance counts keyed by area display_name."""
+    cfg = config or load_gmd_config_v2()
+    custom = cfg.get("metadata", {}).get("custom", {})
+    registry = custom.get("equipment_registry")
+    if isinstance(registry, dict) and isinstance(registry.get("by_area"), dict):
+        return {str(k): int(v) for k, v in registry["by_area"].items()}
+
+    counts: dict[str, int] = {}
+    for entry in collect_active_equipment(cfg):
+        area = str(entry.get("area") or "")
+        counts[area] = counts.get(area, 0) + 1
+    return counts
+
+
+def get_equipment_registry(config: dict[str, Any] | None = None) -> dict[str, Any]:
+    """Return published equipment registry metadata when present."""
+    cfg = config or load_gmd_config_v2()
+    custom = cfg.get("metadata", {}).get("custom", {})
+    registry = custom.get("equipment_registry")
+    if isinstance(registry, dict):
+        return registry
+    return {
+        "total_equipment": get_total_equipment_count(cfg),
+        "by_area": get_equipment_count_by_area(cfg),
+    }

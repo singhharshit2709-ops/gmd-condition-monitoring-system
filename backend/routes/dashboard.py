@@ -8,8 +8,11 @@ from typing import Dict, List, Any, Optional, Set
 from fastapi import APIRouter, HTTPException, Depends, Query
 from gspread.exceptions import APIError
 
-from gmd_config import get_total_equipment_count
+from gmd_config import get_total_equipment_count as get_v1_equipment_count
+from gmd_config_v2 import get_total_equipment_count as get_v2_equipment_count
 from services.google_sheets_service import GMDGoogleSheetsService
+from services.sheets_config import GMD_SHEET_HEADERS_LEGACY, parse_reading_row, to_dashboard_api_row
+from services.sheets_row_model import is_meaningful_reading_row
 
 logger = logging.getLogger("gmd_condition_monitoring.dashboard")
 
@@ -23,7 +26,7 @@ router = APIRouter(
 def get_sheets_service() -> GMDGoogleSheetsService:
     return GMDGoogleSheetsService()
 
-# Column Index Mapping (0-indexed matching columns A through J)
+# Legacy column indices (10-column layout without Area / Tank)
 COL_TIMESTAMP = 0
 COL_CATEGORY = 1
 COL_EQUIPMENT = 2
@@ -72,9 +75,20 @@ def _cache_invalidate(key: str) -> None:
     _dashboard_cache[key]["expires_at"] = datetime.min
 
 
+def invalidate_all_dashboard_cache() -> None:
+    """Clear cached dashboard payloads after new readings are persisted."""
+    for key in _dashboard_cache:
+        _cache_invalidate(key)
+    logger.info("Dashboard cache invalidated (all keys)")
+
+
 def _configured_equipment_total() -> int:
     try:
-        return get_total_equipment_count()
+        return get_v2_equipment_count()
+    except Exception as exc:
+        logger.warning("Failed to load V2 equipment count: %s", exc)
+    try:
+        return get_v1_equipment_count()
     except Exception as exc:
         logger.warning("Failed to load equipment count from gmd_machine_config.json: %s", exc)
         return 0
@@ -171,19 +185,27 @@ def format_last_updated(timestamp: Optional[datetime]) -> str:
     return f"Updated {days} Days Ago"
 
 
-def fetch_and_clean_data(service: GMDGoogleSheetsService) -> List[List[str]]:
+def fetch_and_clean_data(
+    service: GMDGoogleSheetsService,
+) -> tuple[list[str], list[list[str]]]:
     """
-    Fetches raw values using the injected service, drops the header row,
-    and filters out completely blank rows. Handles empty sheets gracefully.
+    Fetch raw values using the injected service, return (header_row, data_rows).
+    Drops blank rows and handles empty sheets gracefully.
     """
     try:
         raw_rows = service.get_all_values()
 
         if not raw_rows or len(raw_rows) <= 1:
             logger.warning("Google Sheet contains no data or only the header row.")
-            return []
+            return list(GMD_SHEET_HEADERS_LEGACY), []
 
-        return [row for row in raw_rows[1:] if row and any(cell.strip() for cell in row)]
+        headers = raw_rows[0]
+        data_rows = [
+            row
+            for row in raw_rows[1:]
+            if is_meaningful_reading_row(row, headers)
+        ]
+        return headers, data_rows
     except APIError as e:
         logger.warning("Google Sheets API error while reading dashboard sheet: %s", e)
         raise
@@ -195,22 +217,17 @@ def fetch_and_clean_data(service: GMDGoogleSheetsService) -> List[List[str]]:
         )
 
 
-def parse_row(row: List[str]) -> Dict[str, Any]:
+def parse_row(row: List[str], headers: List[str] | None = None) -> Dict[str, Any]:
     """
-    Safely converts a raw row list into a structured dictionary.
-    Includes guard checks against shortened arrays due to trailing blank columns.
+    Convert a raw sheet row into the dashboard/reports API shape.
+    Uses canonical parsing internally; preserves legacy response field names.
     """
+    header_row = headers or GMD_SHEET_HEADERS_LEGACY
+    parsed = parse_reading_row(row, header_row)
+    api_row = to_dashboard_api_row(parsed)
     return {
-        "timestamp": row[COL_TIMESTAMP].strip() if len(row) > COL_TIMESTAMP else "",
-        "category": row[COL_CATEGORY].strip() if len(row) > COL_CATEGORY else "",
-        "equipment": row[COL_EQUIPMENT].strip() if len(row) > COL_EQUIPMENT else "",
-        "parameter": row[COL_PARAMETER].strip() if len(row) > COL_PARAMETER else "",
-        "location": row[COL_LOCATION].strip() if len(row) > COL_LOCATION else "",
-        "value": row[COL_VALUE].strip() if len(row) > COL_VALUE else "",
-        "status": row[COL_STATUS].strip().upper() if len(row) > COL_STATUS else "NORMAL",
-        "verified_by": row[COL_VERIFIED_BY].strip() if len(row) > COL_VERIFIED_BY else "",
-        "remarks": row[COL_REMARKS].strip() if len(row) > COL_REMARKS else "",
-        "entry_source": row[COL_ENTRY_SOURCE].strip() if len(row) > COL_ENTRY_SOURCE else ""
+        **api_row,
+        "status": normalize_status(api_row["status"]),
     }
 
 
@@ -227,12 +244,15 @@ def worst_status(*statuses: str) -> str:
     return max((normalize_status(status) for status in statuses), key=lambda s: _STATUS_RANK[s])
 
 
-def get_latest_parameter_rows(rows: List[List[str]]) -> Dict[str, Dict[str, Dict[str, Any]]]:
+def get_latest_parameter_rows(
+    rows: List[List[str]],
+    headers: List[str] | None = None,
+) -> Dict[str, Dict[str, Dict[str, Any]]]:
     """Return the newest sheet row for each (equipment, parameter) pair."""
     latest: Dict[str, Dict[str, Dict[str, Any]]] = {}
 
     for row in rows:
-        parsed = parse_row(row)
+        parsed = parse_row(row, headers)
         equipment = parsed["equipment"]
         parameter = parsed.get("parameter", "")
         if not equipment or not parameter:
@@ -257,13 +277,16 @@ def get_latest_parameter_rows(rows: List[List[str]]) -> Dict[str, Dict[str, Dict
     return latest
 
 
-def get_equipment_status_aggregates(rows: List[List[str]]) -> Dict[str, Dict[str, Any]]:
+def get_equipment_status_aggregates(
+    rows: List[List[str]],
+    headers: List[str] | None = None,
+) -> Dict[str, Dict[str, Any]]:
     """
     Aggregate equipment health using the worst status across all latest parameter readings.
 
     Severity order: ALARM > WARNING > NORMAL
     """
-    latest_by_parameter = get_latest_parameter_rows(rows)
+    latest_by_parameter = get_latest_parameter_rows(rows, headers)
     aggregates: Dict[str, Dict[str, Any]] = {}
 
     for equipment, parameter_rows in latest_by_parameter.items():
@@ -311,8 +334,8 @@ def get_equipment_status_aggregates(rows: List[List[str]]) -> Dict[str, Dict[str
 
 def _load_summary(service: GMDGoogleSheetsService) -> Dict[str, int]:
     logger.info("Computing metrics for dashboard summary.")
-    rows = fetch_and_clean_data(service)
-    equipment_aggregates = get_equipment_status_aggregates(rows)
+    headers, rows = fetch_and_clean_data(service)
+    equipment_aggregates = get_equipment_status_aggregates(rows, headers)
     total_equipment = _configured_equipment_total()
 
     warning = 0
@@ -360,8 +383,8 @@ def get_recent_readings(
     service: GMDGoogleSheetsService = Depends(get_sheets_service)
 ):
     logger.info("Retrieving recent logs.")
-    rows = fetch_and_clean_data(service)
-    parsed_rows = [parse_row(row) for row in rows]
+    headers, rows = fetch_and_clean_data(service)
+    parsed_rows = [parse_row(row, headers) for row in rows]
 
     parsed_rows.sort(
         key=lambda x: parse_timestamp(x.get("timestamp", "")) or datetime.min,
@@ -373,8 +396,8 @@ def get_recent_readings(
 
 def _load_active_alarms(service: GMDGoogleSheetsService) -> List[Dict[str, Any]]:
     logger.info("Retrieving active system alarms.")
-    rows = fetch_and_clean_data(service)
-    equipment_aggregates = get_equipment_status_aggregates(rows)
+    headers, rows = fetch_and_clean_data(service)
+    equipment_aggregates = get_equipment_status_aggregates(rows, headers)
 
     active_alarms = []
     for aggregate in equipment_aggregates.values():
@@ -428,11 +451,11 @@ def acknowledge_alarm(alarm_id: str):
 
 def _load_equipment_health(service: GMDGoogleSheetsService) -> List[Dict[str, Any]]:
     logger.info("Calculating asset health statistics.")
-    rows = fetch_and_clean_data(service)
+    headers, rows = fetch_and_clean_data(service)
     equipment_metrics: Dict[str, Dict[str, Any]] = {}
 
     for row in rows:
-        parsed = parse_row(row)
+        parsed = parse_row(row, headers)
         equip = parsed["equipment"]
         if not equip:
             continue
@@ -467,7 +490,7 @@ def _load_equipment_health(service: GMDGoogleSheetsService) -> List[Dict[str, An
         else:
             metrics["normal_count"] += 1
 
-    equipment_aggregates = get_equipment_status_aggregates(rows)
+    equipment_aggregates = get_equipment_status_aggregates(rows, headers)
     for equip, aggregate in equipment_aggregates.items():
         if equip not in equipment_metrics:
             continue
