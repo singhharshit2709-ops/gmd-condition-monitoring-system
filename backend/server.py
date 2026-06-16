@@ -24,6 +24,7 @@ from __future__ import annotations
 import json
 import logging
 import os
+import traceback
 import uuid
 from datetime import datetime, timezone
 from pathlib import Path
@@ -45,6 +46,7 @@ from config_resolve import (
     resolve_machine_id,
     resolve_motor_name,
 )
+from services.sheets_api_diagnostics import log_api_call_failure, run_sheets_api
 from services.sheets_config import (
     GMD_SHEET_HEADERS,
     detect_sheet_schema,
@@ -518,7 +520,13 @@ def hydrate_readings_cache_from_sheets(recent_tail: int = _RECENT_HISTORY_TAIL) 
             "Cache hydration starting (hybrid B+A, recent_tail=%d)...",
             recent_tail,
         )
-        all_values = _sheets_worksheet.get_all_values()
+        all_values = run_sheets_api(
+            get_worksheet_name(),
+            "worksheet.get_all_values",
+            lambda: _sheets_worksheet.get_all_values(),
+            spreadsheet_id=get_spreadsheet_id(),
+            context="startup_cache_hydration",
+        )
         if len(all_values) <= 1:
             readings_cache = []
             _motor_latest = {}
@@ -560,7 +568,11 @@ def hydrate_readings_cache_from_sheets(recent_tail: int = _RECENT_HISTORY_TAIL) 
             len(_motor_latest),
         )
     except Exception as exc:
-        logger.error("Cache hydration failed — cache unchanged: %s", exc)
+        logger.error(
+            "Cache hydration failed — cache unchanged: %s\n%s",
+            exc,
+            traceback.format_exc(),
+        )
 
 
 def init_google_sheets() -> None:
@@ -604,20 +616,62 @@ def init_google_sheets() -> None:
         logger.info("Spreadsheet opened successfully")
 
         worksheet_title = get_worksheet_name()
+        logger.info(
+            "Google Sheets init step: access legacy worksheet worksheet=%r spreadsheet_id=%r",
+            worksheet_title,
+            sheet_id,
+        )
         try:
-            worksheet = spreadsheet.worksheet(worksheet_title)
+            worksheet = run_sheets_api(
+                worksheet_title,
+                "spreadsheet.worksheet",
+                lambda: spreadsheet.worksheet(worksheet_title),
+                spreadsheet_id=sheet_id,
+            )
         except gspread.exceptions.WorksheetNotFound:
-            worksheet = spreadsheet.add_worksheet(
-                title=worksheet_title, rows=10000, cols=len(_SHEETS_HEADERS)
+            logger.info(
+                "Google Sheets init step: create legacy worksheet worksheet=%r spreadsheet_id=%r",
+                worksheet_title,
+                sheet_id,
             )
-            worksheet.update(
-                [_SHEETS_HEADERS],
+            worksheet = run_sheets_api(
+                worksheet_title,
+                "spreadsheet.add_worksheet",
+                lambda: spreadsheet.add_worksheet(
+                    title=worksheet_title, rows=10000, cols=len(_SHEETS_HEADERS)
+                ),
+                spreadsheet_id=sheet_id,
+                rows=10000,
+                cols=len(_SHEETS_HEADERS),
+            )
+            run_sheets_api(
+                worksheet_title,
+                "worksheet.update",
+                lambda: worksheet.update(
+                    [_SHEETS_HEADERS],
+                    range_name=f"A1:{_sheet_end_col()}1",
+                    value_input_option="RAW",
+                ),
+                spreadsheet_id=sheet_id,
                 range_name=f"A1:{_sheet_end_col()}1",
-                value_input_option="RAW",
+                context="legacy_header_init",
             )
-            logger.info("Google Sheets — created %r worksheet with headers", worksheet_title)
+            logger.info(
+                "Google Sheets — created %r worksheet with headers",
+                worksheet_title,
+            )
 
-        row1 = worksheet.row_values(1)
+        logger.info(
+            "Google Sheets init step: read header row worksheet=%r",
+            worksheet_title,
+        )
+        row1 = run_sheets_api(
+            worksheet_title,
+            "worksheet.row_values",
+            lambda: worksheet.row_values(1),
+            spreadsheet_id=sheet_id,
+            row=1,
+        )
         gmd_schema = detect_sheet_schema([str(cell).strip() for cell in row1])
         if is_gmd_readings_schema(gmd_schema):
             if gmd_schema != SheetSchema.CANONICAL:
@@ -665,13 +719,30 @@ def init_google_sheets() -> None:
         )
 
     except json.JSONDecodeError as exc:
-        logger.error("Google Sheets disabled — JSON validation error: %s", exc)
+        logger.error(
+            "Google Sheets disabled during initialization — JSON validation error at init_google_sheets(): %s\n%s",
+            exc,
+            traceback.format_exc(),
+        )
     except gspread.exceptions.SpreadsheetNotFound as exc:
-        logger.error("Google Sheets disabled — Spreadsheet not found (404) for ID %r: %s", sheet_id, exc)
+        logger.error(
+            "Google Sheets disabled during initialization — Spreadsheet not found (404) for ID %r at init_google_sheets(): %s\n%s",
+            sheet_id,
+            exc,
+            traceback.format_exc(),
+        )
     except gspread.exceptions.APIError as exc:
-        logger.error("Google Sheets disabled — API error during init: %s", exc)
+        logger.error(
+            "Google Sheets disabled during initialization — APIError at init_google_sheets(): %s\n%s",
+            exc,
+            traceback.format_exc(),
+        )
     except Exception as exc:
-        logger.error("Google Sheets disabled — unexpected error during init: %s", exc)
+        logger.error(
+            "Google Sheets disabled during initialization — unexpected error at init_google_sheets(): %s\n%s",
+            exc,
+            traceback.format_exc(),
+        )
 
 
 def save_reading_to_sheets(doc: dict[str, Any]) -> None:
@@ -1013,6 +1084,11 @@ async def startup_event() -> None:
             ui["index_html"],
             ui["static_entries"] or "(empty)",
         )
+    logger.info(
+        "V2 validation endpoint /api/v2/preview is available without Google Sheets "
+        "(legacy _sheets_enabled=%s; GMD DAL initializes on first dashboard/submit request)",
+        _sheets_enabled,
+    )
     logger.info("Condition monitoring server ready.")
 
 
@@ -1444,6 +1520,8 @@ async def health_check() -> dict[str, Any]:
         "version": app.version,
         "sheets_enabled": str(_sheets_enabled),
         "sheets_config": sheets_config_summary(),
+        "v2_preview_requires_sheets": "false",
+        "v2_preview_path": "/api/v2/preview",
         "dashboard_ready": str(ui["dashboard_ready"]),
         "static_dir": ui["static_dir"],
         "static_dir_exists": str(ui["static_dir_exists"]),

@@ -14,6 +14,7 @@ import time
 from collections import defaultdict
 from typing import Any
 
+from services.sheets_api_diagnostics import log_api_call_failure, run_sheets_api
 from services.sheets_area_registry import (
     get_area_worksheet_names,
     include_legacy_readings_worksheet,
@@ -31,6 +32,7 @@ from services.sheets_config import (
     normalize_readings_worksheet,
     worksheet_has_horizontal_drift,
 )
+from services.gmd_datetime import reading_timestamp_sort_key
 from services.sheets_row_model import GMD_SHEET_HEADERS
 
 logger = logging.getLogger("gmd_condition_monitoring.sheets_data_access")
@@ -63,7 +65,13 @@ class SheetsDataAccess:
         self._cache_ttl_seconds = max(30, min(int(seconds), 300))
 
     def _initialize_area_worksheets(self) -> None:
+        sheet_id = get_spreadsheet_id()
         for area_name in get_area_worksheet_names():
+            logger.info(
+                "Initializing area worksheet access: worksheet=%r spreadsheet_id=%r",
+                area_name,
+                sheet_id,
+            )
             worksheet = get_or_create_worksheet(self._spreadsheet, area_name)
             ensure_gmd_header_row(worksheet)
             self._repair_if_needed(worksheet, area_name)
@@ -74,12 +82,30 @@ class SheetsDataAccess:
             legacy_name = self._legacy_worksheet_name
             if legacy_name not in self._worksheets:
                 try:
-                    legacy_ws = self._spreadsheet.worksheet(legacy_name)
+                    legacy_ws = run_sheets_api(
+                        legacy_name,
+                        "spreadsheet.worksheet",
+                        lambda: self._spreadsheet.worksheet(legacy_name),
+                        spreadsheet_id=sheet_id,
+                    )
                     ensure_gmd_header_row(legacy_ws)
                     self._worksheets[f"__legacy__:{legacy_name}"] = legacy_ws
-                    logger.info("Legacy readings worksheet registered for merge: %r", legacy_name)
-                except Exception:
-                    logger.debug("No legacy worksheet %r to merge", legacy_name)
+                    logger.info(
+                        "Legacy readings worksheet registered for merge: %r",
+                        legacy_name,
+                    )
+                except Exception as exc:
+                    log_api_call_failure(
+                        legacy_name,
+                        "spreadsheet.worksheet (legacy merge registration)",
+                        exc,
+                        spreadsheet_id=sheet_id,
+                    )
+                    logger.warning(
+                        "No legacy worksheet %r to merge: %s",
+                        legacy_name,
+                        exc,
+                    )
 
     def _initialize_legacy_worksheet(self) -> None:
         worksheet = get_or_create_worksheet(
@@ -91,7 +117,14 @@ class SheetsDataAccess:
         self._worksheets[self._legacy_worksheet_name] = worksheet
 
     def _repair_if_needed(self, worksheet: Any, label: str) -> None:
-        existing_values = worksheet.get_all_values()
+        sheet_id = get_spreadsheet_id()
+        existing_values = run_sheets_api(
+            label,
+            "worksheet.get_all_values",
+            lambda: worksheet.get_all_values(),
+            spreadsheet_id=sheet_id,
+            context="repair_check",
+        )
         if worksheet_has_horizontal_drift(existing_values):
             stats = normalize_readings_worksheet(worksheet)
             logger.warning(
@@ -100,7 +133,14 @@ class SheetsDataAccess:
                 stats,
             )
         elif worksheet.col_count > len(GMD_SHEET_HEADERS):
-            worksheet.resize(cols=len(GMD_SHEET_HEADERS))
+            run_sheets_api(
+                label,
+                "worksheet.resize",
+                lambda: worksheet.resize(cols=len(GMD_SHEET_HEADERS)),
+                spreadsheet_id=sheet_id,
+                cols=len(GMD_SHEET_HEADERS),
+                context="trim_columns",
+            )
             logger.info(
                 "Worksheet %r column width trimmed to %d canonical columns",
                 label,
@@ -151,10 +191,24 @@ class SheetsDataAccess:
                 return self._cached_values
 
             merged_rows: list[list[str]] = []
+            sheet_id = get_spreadsheet_id()
             for label, worksheet in self._worksheets_for_read():
                 try:
-                    values = worksheet.get_all_values()
+                    values = run_sheets_api(
+                        label,
+                        "worksheet.get_all_values",
+                        lambda ws=worksheet: ws.get_all_values(),
+                        spreadsheet_id=sheet_id,
+                        context="merged_read",
+                    )
                 except Exception as exc:
+                    log_api_call_failure(
+                        label,
+                        "worksheet.get_all_values",
+                        exc,
+                        spreadsheet_id=sheet_id,
+                        context="merged_read",
+                    )
                     logger.warning("Failed reading worksheet %r: %s", label, exc)
                     continue
                 if not values or len(values) <= 1:
@@ -182,7 +236,10 @@ class SheetsDataAccess:
                 )
                 parsed_rows.append((timestamp, canonical))
 
-            parsed_rows.sort(key=lambda item: item[0], reverse=True)
+            parsed_rows.sort(
+                key=lambda item: reading_timestamp_sort_key(item[0]),
+                reverse=True,
+            )
             result = [list(GMD_SHEET_HEADERS)] + [row for _, row in parsed_rows]
             self._cached_values = result
             self._cache_timestamp = time.monotonic()
@@ -223,7 +280,16 @@ class SheetsDataAccess:
                 batch[0].equipment if batch else "",
             )
 
-            worksheet.insert_rows(rows, row=2, value_input_option="USER_ENTERED")
+            run_sheets_api(
+                worksheet_name,
+                "worksheet.insert_rows",
+                lambda: worksheet.insert_rows(
+                    rows, row=2, value_input_option="USER_ENTERED"
+                ),
+                spreadsheet_id=spreadsheet_id,
+                row=2,
+                row_count=len(rows),
+            )
             total_inserted += len(rows)
 
             logger.info(

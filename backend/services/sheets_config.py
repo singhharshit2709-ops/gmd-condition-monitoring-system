@@ -31,6 +31,7 @@ from services.sheets_row_model import (
     parse_reading_row,
     to_dashboard_api_row,
 )
+from services.sheets_api_diagnostics import run_sheets_api, worksheet_name
 from services.sheets_row_model import SheetSchema  # noqa: F401 — re-export
 
 logger = logging.getLogger("gmd_condition_monitoring.sheets_config")
@@ -172,11 +173,30 @@ def get_or_create_worksheet(
 ) -> Any:
     title = worksheet_name or get_worksheet_name()
     column_count = cols or len(GMD_SHEET_HEADERS)
+    sheet_id = get_spreadsheet_id()
     try:
-        return spreadsheet.worksheet(title)
+        return run_sheets_api(
+            title,
+            "spreadsheet.worksheet",
+            lambda: spreadsheet.worksheet(title),
+            spreadsheet_id=sheet_id,
+        )
     except WorksheetNotFound:
-        logger.info("Worksheet %r not found — creating it", title)
-        return spreadsheet.add_worksheet(title=title, rows=rows, cols=column_count)
+        logger.info(
+            "Worksheet %r not found — creating it (spreadsheet_id=%r)",
+            title,
+            sheet_id,
+        )
+        return run_sheets_api(
+            title,
+            "spreadsheet.add_worksheet",
+            lambda: spreadsheet.add_worksheet(
+                title=title, rows=rows, cols=column_count
+            ),
+            spreadsheet_id=sheet_id,
+            rows=rows,
+            cols=column_count,
+        )
 
 
 def _column_letter(index: int) -> str:
@@ -189,7 +209,15 @@ def _column_letter(index: int) -> str:
 
 def ensure_gmd_header_row(worksheet: Any) -> None:
     """Ensure row 1 uses the canonical snake_case GMD header layout."""
-    row1 = worksheet.row_values(1)
+    ws_name = worksheet_name(worksheet)
+    sheet_id = get_spreadsheet_id()
+    row1 = run_sheets_api(
+        ws_name,
+        "worksheet.row_values",
+        lambda: worksheet.row_values(1),
+        spreadsheet_id=sheet_id,
+        row=1,
+    )
     normalized = [str(cell).strip() for cell in row1]
     target_len = len(GMD_SHEET_HEADERS)
 
@@ -200,13 +228,21 @@ def ensure_gmd_header_row(worksheet: Any) -> None:
     if prefix != GMD_SHEET_HEADERS:
         schema = detect_sheet_schema(normalized)
         end_col = _column_letter(target_len)
-        worksheet.update(
-            [GMD_SHEET_HEADERS],
-            range_name=f"A1:{end_col}1",
-            value_input_option="RAW",
+        range_name = f"A1:{end_col}1"
+        run_sheets_api(
+            ws_name,
+            "worksheet.update",
+            lambda: worksheet.update(
+                [GMD_SHEET_HEADERS],
+                range_name=range_name,
+                value_input_option="RAW",
+            ),
+            spreadsheet_id=sheet_id,
+            range_name=range_name,
         )
         logger.info(
-            "GMD worksheet header row upgraded from %s to canonical layout A1:%s1 (%d columns)",
+            "GMD worksheet %r header row upgraded from %s to canonical layout A1:%s1 (%d columns)",
+            ws_name,
             schema.value,
             end_col,
             target_len,
@@ -243,29 +279,59 @@ def normalize_readings_worksheet(worksheet: Any) -> dict[str, int]:
     Recovers horizontally drifted rows and trims excess worksheet columns so
     future inserts always start at column A.
     """
-    all_values = worksheet.get_all_values()
+    ws_name = worksheet_name(worksheet)
+    sheet_id = get_spreadsheet_id()
+    all_values = run_sheets_api(
+        ws_name,
+        "worksheet.get_all_values",
+        lambda: worksheet.get_all_values(),
+        spreadsheet_id=sheet_id,
+    )
     canonical_rows = extract_reading_rows_from_worksheet(all_values)
     target_len = len(GMD_SHEET_HEADERS)
     end_col = _column_letter(target_len)
     all_rows = [list(GMD_SHEET_HEADERS)] + canonical_rows
     total_rows = len(all_rows)
 
-    worksheet.resize(
+    run_sheets_api(
+        ws_name,
+        "worksheet.resize",
+        lambda: worksheet.resize(
+            rows=max(total_rows + 100, 1000),
+            cols=target_len,
+        ),
+        spreadsheet_id=sheet_id,
         rows=max(total_rows + 100, 1000),
         cols=target_len,
     )
-    worksheet.update(
-        all_rows,
-        range_name=f"A1:{end_col}{total_rows}",
-        value_input_option="RAW",
+    update_range = f"A1:{end_col}{total_rows}"
+    run_sheets_api(
+        ws_name,
+        "worksheet.update",
+        lambda: worksheet.update(
+            all_rows,
+            range_name=update_range,
+            value_input_option="RAW",
+        ),
+        spreadsheet_id=sheet_id,
+        range_name=update_range,
+        row_count=total_rows,
     )
 
     current_rows = worksheet.row_count
     if current_rows > total_rows:
-        worksheet.delete_rows(total_rows + 1, current_rows)
+        run_sheets_api(
+            ws_name,
+            "worksheet.delete_rows",
+            lambda: worksheet.delete_rows(total_rows + 1, current_rows),
+            spreadsheet_id=sheet_id,
+            start_row=total_rows + 1,
+            end_row=current_rows,
+        )
 
     logger.info(
-        "GMD worksheet normalized: recovered_rows=%d total_rows=%d columns=%d",
+        "GMD worksheet %r normalized: recovered_rows=%d total_rows=%d columns=%d",
+        ws_name,
         len(canonical_rows),
         total_rows,
         target_len,

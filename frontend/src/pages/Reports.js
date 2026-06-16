@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import axios from "axios";
 import { getApiBase } from "@/lib/api";
+import { parseTimestamp } from "@/lib/dashboardAnalytics";
 
 const API = getApiBase();
 
@@ -87,8 +88,8 @@ const Reports = () => {
       }
 
       if (start || end) {
-        const timestamp = row.timestamp ? new Date(row.timestamp) : null;
-        if (!timestamp || Number.isNaN(timestamp.getTime())) {
+        const timestamp = parseTimestamp(row.timestamp);
+        if (!timestamp) {
           return false;
         }
         if (start && timestamp < start) {

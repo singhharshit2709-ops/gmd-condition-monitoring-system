@@ -96,6 +96,12 @@ async def preview_v2_submission(payload: V2PreviewRequest) -> V2PreviewResponse:
     Validate category, equipment, and parameter readings against gmd_machine_config_v2.json.
     Does not write to Google Sheets or trigger classification/alarms.
     """
+    logger.info(
+        "V2 preview validation request (no Google Sheets dependency): category=%r equipment=%r readings=%d",
+        payload.category,
+        payload.equipment,
+        len(payload.readings or {}),
+    )
     return validate_v2_submission(payload).preview
 
 

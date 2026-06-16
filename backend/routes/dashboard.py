@@ -10,6 +10,7 @@ from gspread.exceptions import APIError
 
 from gmd_config import get_total_equipment_count as get_v1_equipment_count
 from gmd_config_v2 import get_total_equipment_count as get_v2_equipment_count
+from services.gmd_datetime import parse_plant_date, parse_plant_timestamp, plant_now, plant_datetime_min
 from services.google_sheets_service import GMDGoogleSheetsService
 from services.sheets_config import GMD_SHEET_HEADERS_LEGACY, parse_reading_row, to_dashboard_api_row
 from services.sheets_row_model import is_meaningful_reading_row
@@ -139,41 +140,20 @@ def _get_cached_dashboard_payload(key: str, loader, fallback):
 
 
 def parse_timestamp(value: str) -> Optional[datetime]:
-    if not isinstance(value, str):
-        return None
-
-    value = value.strip()
-    if not value:
-        return None
-
-    formats = [
-        "%Y-%m-%d %H:%M:%S",
-        "%Y-%m-%dT%H:%M:%S",
-        "%Y-%m-%dT%H:%M:%S.%f",
-        "%d/%m/%Y %H:%M:%S",
-        "%d-%m-%Y %H:%M:%S",
-        "%Y-%m-%d",
-        "%d/%m/%Y",
-        "%d-%m-%Y",
-    ]
-
-    for fmt in formats:
-        try:
-            return datetime.strptime(value, fmt)
-        except ValueError:
-            continue
-
-    try:
-        return datetime.fromisoformat(value.replace(" ", "T"))
-    except Exception:
-        return None
+    """Parse a reading timestamp as plant-local time (default Asia/Kolkata)."""
+    return parse_plant_timestamp(value)
 
 
 def format_last_updated(timestamp: Optional[datetime]) -> str:
     if not timestamp:
         return "Updated Unknown"
 
-    now = datetime.now()
+    if timestamp.tzinfo is None:
+        timestamp = parse_plant_timestamp(timestamp.strftime("%Y-%m-%d %H:%M:%S"))
+        if not timestamp:
+            return "Updated Unknown"
+
+    now = plant_now()
     delta = now - timestamp
     days = max(0, delta.days)
 
@@ -298,12 +278,12 @@ def get_equipment_status_aggregates(
 
         representative: Optional[Dict[str, Any]] = None
         representative_rank = -1
-        representative_ts = datetime.min
+        representative_ts = plant_datetime_min()
 
         for record in parameter_rows.values():
             record_status = normalize_status(record.get("status", STATUS_NORMAL))
             record_rank = _STATUS_RANK[record_status]
-            record_ts = record.get("_parsed_timestamp") or datetime.min
+            record_ts = record.get("_parsed_timestamp") or plant_datetime_min()
 
             if record_rank > representative_rank or (
                 record_rank == representative_rank and record_ts > representative_ts
@@ -387,7 +367,7 @@ def get_recent_readings(
     parsed_rows = [parse_row(row, headers) for row in rows]
 
     parsed_rows.sort(
-        key=lambda x: parse_timestamp(x.get("timestamp", "")) or datetime.min,
+        key=lambda x: parse_timestamp(x.get("timestamp", "")) or plant_datetime_min(),
         reverse=True
     )
 
@@ -414,7 +394,7 @@ def _load_active_alarms(service: GMDGoogleSheetsService) -> List[Dict[str, Any]]
             active_alarms.append(alarm_record)
 
     active_alarms.sort(
-        key=lambda x: x.get("_parsed_timestamp") or datetime.min,
+        key=lambda x: x.get("_parsed_timestamp") or plant_datetime_min(),
         reverse=True
     )
 

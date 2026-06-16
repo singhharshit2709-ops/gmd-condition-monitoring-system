@@ -9,6 +9,7 @@ from routes.dashboard import (
     parse_timestamp,
     get_sheets_service,
 )
+from services.gmd_datetime import parse_plant_date, plant_datetime_min
 from services.google_sheets_service import GMDGoogleSheetsService
 
 router = APIRouter(
@@ -19,7 +20,7 @@ router = APIRouter(
 
 def parse_date_string(value: str) -> datetime:
     try:
-        return datetime.strptime(value.strip(), "%Y-%m-%d")
+        return parse_plant_date(value)
     except ValueError as exc:
         raise HTTPException(
             status_code=400,
@@ -41,7 +42,7 @@ def get_report_readings(
 
     try:
         parsed_rows.sort(
-            key=lambda x: parse_timestamp(x.get("timestamp", "")) or datetime.min,
+            key=lambda x: parse_timestamp(x.get("timestamp", "")) or plant_datetime_min(),
             reverse=True,
         )
     except Exception:

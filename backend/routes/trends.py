@@ -4,6 +4,7 @@ from typing import Any, Dict, List, Optional
 from fastapi import APIRouter, Depends, Query, HTTPException
 
 from routes.dashboard import fetch_and_clean_data, get_sheets_service, parse_row, parse_timestamp
+from services.gmd_datetime import parse_plant_date, plant_datetime_min, plant_now
 from services.google_sheets_service import GMDGoogleSheetsService
 
 router = APIRouter(
@@ -14,7 +15,7 @@ router = APIRouter(
 
 def parse_date_string(value: str) -> datetime:
     try:
-        return datetime.strptime(value.strip(), "%Y-%m-%d")
+        return parse_plant_date(value)
     except ValueError as exc:
         raise HTTPException(
             status_code=400,
@@ -56,7 +57,7 @@ def get_trend_readings(
         raise HTTPException(status_code=400, detail="end_date must be the same or later than start_date.")
 
     if start_ts is None and end_ts is None and window is not None:
-        end_ts = datetime.now()
+        end_ts = plant_now()
         start_ts = end_ts - timedelta(days=window)
 
     lower_area = area_tank.strip().lower() if area_tank else None
@@ -122,7 +123,7 @@ def get_trend_readings(
         })
 
     trend_data.sort(
-        key=lambda item: parse_timestamp(item.get("timestamp", "")) or datetime.min
+        key=lambda item: parse_timestamp(item.get("timestamp", "")) or plant_datetime_min(),
     )
 
     return trend_data

@@ -11,6 +11,7 @@ import {
   Legend,
 } from "recharts";
 import { getApiBase } from "@/lib/api";
+import { parseTimestamp } from "@/lib/dashboardAnalytics";
 
 const API = getApiBase();
 const STANDARD_PARAMETERS = [
@@ -77,8 +78,8 @@ const formatTimestamp = (value) => {
     return "—";
   }
 
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) {
+  const date = parseTimestamp(value);
+  if (!date) {
     return value;
   }
 
@@ -178,8 +179,8 @@ const ConditionMonitoring = () => {
       readings
         .filter((row) => row.equipment === selectedEquipment)
         .sort((a, b) => {
-          const left = new Date(a.timestamp || "");
-          const right = new Date(b.timestamp || "");
+          const left = parseTimestamp(a.timestamp)?.getTime() ?? 0;
+          const right = parseTimestamp(b.timestamp)?.getTime() ?? 0;
           return right - left;
         }),
     [readings, selectedEquipment]
@@ -255,8 +256,8 @@ const ConditionMonitoring = () => {
       })
       .filter(Boolean)
       .sort((a, b) => {
-        const left = new Date(a.timestamp);
-        const right = new Date(b.timestamp);
+        const left = parseTimestamp(a.timestamp)?.getTime() ?? 0;
+        const right = parseTimestamp(b.timestamp)?.getTime() ?? 0;
         return left - right;
       });
   }, [equipmentRows, selectedParameter]);

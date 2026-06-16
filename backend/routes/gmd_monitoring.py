@@ -1,8 +1,8 @@
 import logging
-from datetime import datetime
 from fastapi import APIRouter, HTTPException, Depends, status
 from models.gmd_models import GMDReadingsRequest, BulkSubmissionResponse
 from gmd_config import validate_gmd_submission
+from services.gmd_datetime import log_submission_timestamp
 from services.google_sheets_service import GMDGoogleSheetsService
 
 # Configure structured routing logger matching core systems
@@ -68,7 +68,7 @@ async def submit_bulk_readings(
             success=True,
             message=f"Successfully logged {rows_committed} metric records for asset unit '{payload.equipment}'.",
             rows_appended=rows_committed,
-            timestamp=datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+            timestamp=log_submission_timestamp("GMD bulk submit response"),
         )
 
     except ValueError as schema_err:

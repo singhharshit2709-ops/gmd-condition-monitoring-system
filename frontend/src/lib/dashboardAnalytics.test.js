@@ -6,6 +6,7 @@ import {
   computeTodayCompletedEquipment,
   computeTodayMetrics,
   isToday,
+  formatRelativeTime,
   matchConfiguredEquipmentInArea,
   normalizeAreaKey,
   parseTimestamp,
@@ -39,6 +40,18 @@ describe("dashboardAnalytics aggregation", () => {
   test("normalizes area keys consistently", () => {
     expect(normalizeAreaKey("  E   Tank ")).toBe("E Tank");
     expect(normalizeAreaKey("e tank")).toBe("e tank");
+  });
+
+  test("parses sheet timestamps as plant-local IST wall clock", () => {
+    const parsed = parseTimestamp("2026-06-16 15:00:00");
+    expect(parsed).not.toBeNull();
+    expect(parsed.toISOString()).toBe("2026-06-16T09:30:00.000Z");
+  });
+
+  test("formatRelativeTime uses IST-parsed instants", () => {
+    const reading = "2026-06-16 14:00:00";
+    const now = parseTimestamp("2026-06-16 15:00:00");
+    expect(formatRelativeTime(reading, now).label).toBe("1 hour ago");
   });
 
   test("parses sheet timestamps as local today", () => {

@@ -1,7 +1,7 @@
 import logging
 import threading
+import traceback
 import uuid
-from datetime import datetime
 from typing import Dict, Any, List, Optional
 
 import gspread
@@ -15,6 +15,7 @@ from services.sheets_config import (
     load_service_account_credentials,
     open_spreadsheet,
 )
+from services.gmd_datetime import log_submission_timestamp
 from services.sheets_data_access import SheetsDataAccess
 from services.threshold_service import classify_v2_parameter_status
 
@@ -60,7 +61,21 @@ class GMDGoogleSheetsService:
         spreadsheet = open_spreadsheet(client, spreadsheet_id)
         logger.info("Spreadsheet opened successfully: %s", spreadsheet.title)
 
-        self._data_access = SheetsDataAccess(client, spreadsheet)
+        logger.info(
+            "Initializing SheetsDataAccess (multi-area layout) spreadsheet_id=%s",
+            spreadsheet_id,
+        )
+        try:
+            self._data_access = SheetsDataAccess(client, spreadsheet)
+        except Exception as exc:
+            logger.error(
+                "GMDGoogleSheetsService initialization failed during SheetsDataAccess "
+                "setup spreadsheet_id=%s: %s\n%s",
+                spreadsheet_id,
+                exc,
+                traceback.format_exc(),
+            )
+            raise
         self._data_access.set_cache_ttl(get_cache_ttl_seconds())
         self.sheet = self._data_access.primary_worksheet
 
@@ -126,7 +141,7 @@ class GMDGoogleSheetsService:
             verified_by=verified_by,
         )
 
-        timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        timestamp = log_submission_timestamp("V1 sheet append")
         submission_id = str(uuid.uuid4())
         records: list[ReadingRowRecord] = []
 
@@ -187,7 +202,7 @@ class GMDGoogleSheetsService:
         submission_id: str = "",
     ) -> Dict[str, Any]:
         """Persist V2 round sheet readings using the canonical row model."""
-        timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        timestamp = log_submission_timestamp("V2 sheet append")
         units = parameter_units or {}
         resolved_submission_id = submission_id.strip() or str(uuid.uuid4())
 

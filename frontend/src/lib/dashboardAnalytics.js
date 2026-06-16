@@ -83,6 +83,21 @@ export function normalizeStatus(status) {
   return "NORMAL";
 }
 
+/** Plant timezone for all sheet timestamps (matches backend GMD_PLANT_TIMEZONE). */
+export const PLANT_TIMEZONE = "Asia/Kolkata";
+const PLANT_UTC_OFFSET = "+05:30";
+
+function plantCalendarDay(date) {
+  return date.toLocaleDateString("en-CA", { timeZone: PLANT_TIMEZONE });
+}
+
+function parsePlantWallClock(y, m, d, h, min, s = "0") {
+  const sec = String(s).padStart(2, "0");
+  const iso = `${y}-${String(m).padStart(2, "0")}-${String(d).padStart(2, "0")}T${String(h).padStart(2, "0")}:${String(min).padStart(2, "0")}:${sec}${PLANT_UTC_OFFSET}`;
+  const date = new Date(iso);
+  return Number.isNaN(date.getTime()) ? null : date;
+}
+
 export function parseTimestamp(value) {
   if (!value) return null;
   if (value instanceof Date) {
@@ -92,11 +107,22 @@ export function parseTimestamp(value) {
   const text = String(value).trim();
   if (!text) return null;
 
-  const localMatch = text.match(/^(\d{4})-(\d{2})-(\d{2})[ T](\d{2}):(\d{2})(?::(\d{2}))?/);
-  if (localMatch) {
-    const [, y, m, d, h, min, s = "0"] = localMatch;
-    const date = new Date(Number(y), Number(m) - 1, Number(d), Number(h), Number(min), Number(s));
-    return Number.isNaN(date.getTime()) ? null : date;
+  const isoMatch = text.match(/^(\d{4})-(\d{2})-(\d{2})[ T](\d{2}):(\d{2})(?::(\d{2}))?/);
+  if (isoMatch) {
+    const [, y, m, d, h, min, s = "0"] = isoMatch;
+    return parsePlantWallClock(y, m, d, h, min, s);
+  }
+
+  const dmyMatch = text.match(/^(\d{2})\/(\d{2})\/(\d{4})[ T](\d{2}):(\d{2})(?::(\d{2}))?/);
+  if (dmyMatch) {
+    const [, d, m, y, h, min, s = "0"] = dmyMatch;
+    return parsePlantWallClock(y, m, d, h, min, s);
+  }
+
+  const dmyDashMatch = text.match(/^(\d{2})-(\d{2})-(\d{4})[ T](\d{2}):(\d{2})(?::(\d{2}))?/);
+  if (dmyDashMatch) {
+    const [, d, m, y, h, min, s = "0"] = dmyDashMatch;
+    return parsePlantWallClock(y, m, d, h, min, s);
   }
 
   const date = new Date(text);
@@ -105,12 +131,7 @@ export function parseTimestamp(value) {
 
 export function isToday(date) {
   if (!date) return false;
-  const now = new Date();
-  return (
-    date.getFullYear() === now.getFullYear() &&
-    date.getMonth() === now.getMonth() &&
-    date.getDate() === now.getDate()
-  );
+  return plantCalendarDay(date) === plantCalendarDay(new Date());
 }
 
 export function formatTime(value) {
@@ -141,13 +162,8 @@ export const DASHBOARD_STATUS = {
 };
 
 function isYesterday(date, now = new Date()) {
-  const yesterday = new Date(now);
-  yesterday.setDate(yesterday.getDate() - 1);
-  return (
-    date.getFullYear() === yesterday.getFullYear() &&
-    date.getMonth() === yesterday.getMonth() &&
-    date.getDate() === yesterday.getDate()
-  );
+  const yesterday = new Date(now.getTime() - 24 * 60 * 60 * 1000);
+  return plantCalendarDay(date) === plantCalendarDay(yesterday);
 }
 
 /**

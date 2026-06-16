@@ -1,6 +1,6 @@
 from pydantic import BaseModel, Field, field_validator
 from typing import Dict, Any, Optional
-from datetime import datetime
+from services.gmd_datetime import format_plant_timestamp
 
 
 class ReadingSubmission(BaseModel):
@@ -74,5 +74,5 @@ class BulkSubmissionResponse(BaseModel):
     message: str
     rows_appended: int
     timestamp: str = Field(
-        default_factory=lambda: datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        default_factory=format_plant_timestamp
     )

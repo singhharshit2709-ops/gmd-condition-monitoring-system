@@ -112,8 +112,10 @@ export function buildTrendRequestParams({ area, equipmentEntry, parameterKey, ca
   return params;
 }
 
+import { parseTimestamp } from "@/lib/dashboardAnalytics";
+
 export function formatTrendTimestamp(timestamp) {
-  const date = new Date(timestamp);
+  const date = parseTimestamp(timestamp);
   if (Number.isNaN(date.getTime())) return String(timestamp || "—");
   return date.toLocaleString("en-GB", {
     day: "2-digit",
@@ -124,7 +126,7 @@ export function formatTrendTimestamp(timestamp) {
 }
 
 export function formatChartTick(timestamp) {
-  const date = new Date(timestamp);
+  const date = parseTimestamp(timestamp);
   if (Number.isNaN(date.getTime())) return "";
   return date.toLocaleString("en-GB", { day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit" });
 }
@@ -145,7 +147,7 @@ export function buildChartSeries(readings, parameterKeys) {
       byTime.set(ts, {
         timestamp: ts,
         label: formatChartTick(ts),
-        rawTime: new Date(ts).getTime(),
+        rawTime: parseTimestamp(ts)?.getTime() ?? 0,
       });
     }
     const point = byTime.get(ts);
@@ -178,8 +180,8 @@ export function computeTrendStats(readings, parameterKey) {
   const values = filtered.map((r) => Number(r.value)).filter((v) => !Number.isNaN(v));
   const sum = values.reduce((a, b) => a + b, 0);
   const latest = filtered.reduce((best, row) => {
-    const t = new Date(row.timestamp).getTime();
-    const bestT = new Date(best.timestamp).getTime();
+    const t = parseTimestamp(row.timestamp)?.getTime() ?? 0;
+    const bestT = parseTimestamp(best.timestamp)?.getTime() ?? 0;
     return t > bestT ? row : best;
   }, filtered[0]);
 
