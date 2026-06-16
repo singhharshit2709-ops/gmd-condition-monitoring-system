@@ -1,0 +1,54 @@
+GMD Equipment Parameter & Threshold Master — Validation Summary
+==============================================================
+Prepared By: Harshit Singh
+Version: 1.0
+Config Source: C:\Users\singh\Desktop\GMD\General-maintenance-deartment-condition-monitoring-system-main\backend\gmd_machine_config_v2.json
+
+Total Areas (physical):     5
+  A Tank, E Tank, G Tank, K Tank, Utility Area
+Dashboard areas (incl. DM): A Tank, DM Water Electrode Cooling, E Tank, G Tank, K Tank, Utility Area
+Total Categories:           5
+  Blowers, Cooling Tower Water Monitoring, DM Water Batch Charger, DM Water Electrode Cooling, Utility Area Monitoring
+Total Equipment:            87
+Total Parameters (keys):    42
+Total Rows:                 1002
+Tag numbers used:           28
+
+Records removed:            0
+Confirmation:               Exported strictly from gmd_machine_config_v2.json — no placeholder or sample data. Equipment and parameter labels match Add Reading.
+
+First 30 equipment names:
+   1. Chimney Blower-3
+   2. Chimney Blower-4
+   3. Cooling Blower-15
+   4. Cooling Blower-16
+   5. Gas Blower-1
+   6. Gas Blower-2
+   7. MCB-1
+   8. MCB-2
+   9. MCB-3
+  10. Tank Cooling Blower-7
+  11. Tank Cooling Blower-8
+  12. Throat Cool Blower-11
+  13. Throat Cool Blower-12
+  14. A Tank CT
+  15. A Tank Batch Charger
+  16. A Tank Electrode Cooling
+  17. Block Cooling Blower-7
+  18. Block Cooling Blower-8
+  19. Chimney Blower-3
+  20. Chimney Blower-4
+  21. Gas Blower-1
+  22. Gas Blower-2
+  23. MCB-5
+  24. MCB-6
+  25. Tank Cool Blower-11
+  26. Tank Cool Blower-12
+  27. Working End Blower-1
+  28. Working End Blower-2
+  29. E Tank Electrode Cooling
+  30. Block Cooling Blower-1
+
+Output files:
+  CSV:  C:\Users\singh\Desktop\GMD\General-maintenance-deartment-condition-monitoring-system-main\templates\GMD_Equipment_Parameter_Threshold_Master.csv
+  XLSX: C:\Users\singh\Desktop\GMD\General-maintenance-deartment-condition-monitoring-system-main\templates\GMD_Equipment_Parameter_Threshold_Master.xlsx

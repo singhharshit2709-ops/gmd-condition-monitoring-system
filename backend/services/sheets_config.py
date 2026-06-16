@@ -284,9 +284,16 @@ def sheets_config_summary() -> dict[str, str]:
     except RuntimeError:
         creds_source = "missing"
 
+    from services.sheets_area_registry import (
+        get_area_worksheet_names,
+        is_multi_area_layout_enabled,
+    )
+
     return {
         "enabled": str(is_sheets_enabled()),
         "spreadsheet_id_set": str(bool(get_spreadsheet_id())),
         "worksheet": get_worksheet_name(),
+        "multi_area_layout": str(is_multi_area_layout_enabled()),
+        "area_worksheets": ", ".join(get_area_worksheet_names()),
         "credentials_source": creds_source,
     }

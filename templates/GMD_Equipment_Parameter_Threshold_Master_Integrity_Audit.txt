@@ -1,0 +1,95 @@
+GMD Equipment Parameter & Threshold Master — Integrity Audit
+==============================================================
+Config Source: C:\Users\singh\Desktop\GMD\General-maintenance-deartment-condition-monitoring-system-main\backend\gmd_machine_config_v2.json
+Export CSV:    C:\Users\singh\Desktop\GMD\General-maintenance-deartment-condition-monitoring-system-main\templates\GMD_Equipment_Parameter_Threshold_Master.csv
+
+1. Total Areas (physical Area / Tank column): 5
+   A Tank, E Tank, G Tank, K Tank, Utility Area
+
+2. Total Categories: 5
+   Blowers, Cooling Tower Water Monitoring, DM Water Batch Charger, DM Water Electrode Cooling, Utility Area Monitoring
+
+3. Total Equipment: 87
+
+4. Total Parameter Rows: 1002
+   Total Unique Parameter Keys: 42
+
+5. Area-wise Breakdown (physical Area / Tank)
+
+A Tank
+  • Blowers
+      Equipment Count:  13
+      Parameter Count:  208
+  • Cooling Tower Water Monitoring
+      Equipment Count:  1
+      Parameter Count:  3
+  • DM Water Batch Charger
+      Equipment Count:  1
+      Parameter Count:  1
+  • DM Water Electrode Cooling
+      Equipment Count:  1
+      Parameter Count:  3
+
+E Tank
+  • Blowers
+      Equipment Count:  12
+      Parameter Count:  192
+  • DM Water Electrode Cooling
+      Equipment Count:  1
+      Parameter Count:  3
+
+G Tank
+  • Blowers
+      Equipment Count:  13
+      Parameter Count:  208
+  • Cooling Tower Water Monitoring
+      Equipment Count:  1
+      Parameter Count:  3
+  • DM Water Electrode Cooling
+      Equipment Count:  1
+      Parameter Count:  3
+
+K Tank
+  • Blowers
+      Equipment Count:  11
+      Parameter Count:  176
+  • DM Water Batch Charger
+      Equipment Count:  1
+      Parameter Count:  1
+  • DM Water Electrode Cooling
+      Equipment Count:  1
+      Parameter Count:  3
+
+Utility Area
+  • Cooling Tower Water Monitoring
+      Equipment Count:  1
+      Parameter Count:  3
+  • Utility Area Monitoring
+      Equipment Count:  29
+      Parameter Count:  195
+
+DM Water Electrode Cooling Area Check
+  Requirement: DM Water appears as Category under each Tank, NOT as Area / Tank.
+  PASS: No rows use DM Water Electrode Cooling as Area / Tank
+  A Tank: DM Water Batch Charger, DM Water Electrode Cooling
+  E Tank: DM Water Electrode Cooling
+  G Tank: DM Water Electrode Cooling
+  K Tank: DM Water Batch Charger, DM Water Electrode Cooling
+
+Key Equipment Verification
+  [PASS] MCB-1: MCB-1 [tag=-]
+  [PASS] MCB-2: MCB-2 [tag=-]
+  [PASS] MCB-3: MCB-3 [tag=-]
+  [PASS] Chimney Blowers: Chimney Blower (15 kW)-1 [tag=-]; Chimney Blower (15 kW)-2 [tag=-]; Chimney Blower (15 kW)-3 [tag=-]; Chimney Blower (7.5 kW)-1 [tag=-]; Chimney Blower (7.5 kW)-2 [tag=-]
+  [PASS] Cooling Blowers: Block Cooling Blower-1 [tag=-]; Block Cooling Blower-2 [tag=-]; Block Cooling Blower-7 [tag=-]; Block Cooling Blower-8 [tag=-]; Cooling Blower-15 [tag=-]
+  [PASS] Block Cooling Blowers: Block Cooling Blower-1 [tag=-]; Block Cooling Blower-2 [tag=-]; Block Cooling Blower-7 [tag=-]; Block Cooling Blower-8 [tag=-]
+  [PASS] Comp-1: Comp-1 (Screw Compressor) [tag=Comp-1]
+  [PASS] Comp-2: Comp-2 (Screw Compressor) [tag=Comp-2]
+  [PASS] Pilot Air: Pilot Air (Screw Compressor) [tag=Pilot Air]
+  [PASS] Air Dryer LP: LP (Air Dryer) [tag=LP]
+  [PASS] Air Dryer HP: HP (Air Dryer) [tag=HP]
+  [PASS] Centac: centac-1 (Centrifugal Compressor) [tag=centac-1]; centac-2 (Centrifugal Compressor) [tag=centac-2]; centac-3 (Centrifugal Compressor) [tag=centac-3]
+  [PASS] Cooling Towers: BATCH (Cooling Tower Pump) [tag=BATCH]; Compressor House CT (Cooling Tower Water Monitoring) [tag=Compressor House CT]; Cooling Tower-1 (Cooling Tower) [tag=Cooling Tower-1]; Cooling Tower-2 (Cooling Tower) [tag=Cooling Tower-2]; Cooling Tower-3 (Cooling Tower) [tag=Cooling Tower-3]
+  [PASS] DM Water Electrode Cooling: A Tank Electrode Cooling [tag=-]; E Tank Electrode Cooling [tag=-]; G Tank Electrode Cooling [tag=-]; K Tank Electrode Cooling [tag=-]
+
+Threshold Master verified successfully. This is a 1:1 representation of the live dashboard configuration and is ready to be shared with management and the user department.

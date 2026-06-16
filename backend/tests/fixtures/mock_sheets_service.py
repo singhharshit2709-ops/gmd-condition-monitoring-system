@@ -8,7 +8,7 @@ from typing import Any, Dict, List, Optional
 import uuid
 
 from services.sheets_row_model import (
-    GMD_SHEET_HEADERS,
+    GMD_SHEET_HEADERS_LEGACY,
     ReadingRowRecord,
     build_reading_row,
 )
@@ -25,7 +25,7 @@ class MockGMDGoogleSheetsService:
         header_row: List[str] | None = None,
     ) -> None:
         self._data_rows = [list(row) for row in data_rows]
-        self._header_row = list(header_row or GMD_SHEET_HEADERS)
+        self._header_row = list(header_row or GMD_SHEET_HEADERS_LEGACY)
         self._append_v2_raises = append_v2_raises
         self.append_v2_calls: List[Dict[str, Any]] = []
 

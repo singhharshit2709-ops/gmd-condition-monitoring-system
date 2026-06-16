@@ -1,6 +1,5 @@
 import logging
 import threading
-import time
 import uuid
 from datetime import datetime
 from typing import Dict, Any, List, Optional
@@ -10,19 +9,14 @@ import gspread
 from gmd_config import validate_gmd_submission
 from services.sheets_config import (
     ReadingRowRecord,
-    build_reading_row,
-    ensure_gmd_header_row,
     get_cache_ttl_seconds,
-    get_or_create_worksheet,
     get_spreadsheet_id,
-    get_worksheet_name,
     is_sheets_enabled,
     load_service_account_credentials,
-    normalize_readings_worksheet,
     open_spreadsheet,
-    worksheet_has_horizontal_drift,
 )
-from services.sheets_row_model import GMD_SHEET_HEADERS
+from services.sheets_data_access import SheetsDataAccess
+from services.threshold_service import classify_v2_parameter_status
 
 logger = logging.getLogger("gmd_monitoring")
 logging.basicConfig(level=logging.INFO)
@@ -55,127 +49,60 @@ class GMDGoogleSheetsService:
             )
 
         creds, credential_source = load_service_account_credentials()
-        worksheet_name = get_worksheet_name()
 
         client = gspread.authorize(creds)
         logger.info(
-            "Connecting to spreadsheet id=%s worksheet=%r credentials=%s",
+            "Connecting to spreadsheet id=%s credentials=%s",
             spreadsheet_id,
-            worksheet_name,
             credential_source,
         )
 
         spreadsheet = open_spreadsheet(client, spreadsheet_id)
         logger.info("Spreadsheet opened successfully: %s", spreadsheet.title)
 
-        self.sheet = get_or_create_worksheet(spreadsheet, worksheet_name)
-        ensure_gmd_header_row(self.sheet)
+        self._data_access = SheetsDataAccess(client, spreadsheet)
+        self._data_access.set_cache_ttl(get_cache_ttl_seconds())
+        self.sheet = self._data_access.primary_worksheet
 
-        existing_values = self.sheet.get_all_values()
-        if worksheet_has_horizontal_drift(existing_values):
-            stats = normalize_readings_worksheet(self.sheet)
-            logger.warning(
-                "Repaired horizontally drifted Readings worksheet: %s",
-                stats,
-            )
-        elif self.sheet.col_count > len(GMD_SHEET_HEADERS):
-            self.sheet.resize(cols=len(GMD_SHEET_HEADERS))
-            logger.info(
-                "GMD worksheet column width trimmed to %d canonical columns",
-                len(GMD_SHEET_HEADERS),
-            )
-
-        logger.info("Successfully targeted worksheet %r", worksheet_name)
-
-        self._cache_lock = threading.Lock()
-        self._cache_ttl_seconds = get_cache_ttl_seconds()
-        self._cached_sheet_timestamp = 0.0
-        self._cached_sheet_values: Optional[List[List[str]]] = None
-        self._cached_sheet_records: Optional[List[Dict[str, Any]]] = None
-        self._initialized = True
-
-    def _cache_valid(self) -> bool:
-        return (
-            self._cached_sheet_timestamp > 0
-            and (time.monotonic() - self._cached_sheet_timestamp) < self._cache_ttl_seconds
+        layout = self._data_access.layout_summary()
+        logger.info(
+            "Google Sheets data access initialized: multi_area=%s worksheets=%s",
+            layout["multi_area_enabled"],
+            layout["worksheets_registered"],
         )
 
-    def get_all_values(self) -> List[List[str]]:
-        with self._cache_lock:
-            if self._cached_sheet_values is not None and self._cache_valid():
-                logger.debug("Using cached Google Sheets values")
-                return self._cached_sheet_values
+        self._initialized = True
 
-            values = self.sheet.get_all_values()
-            self._cached_sheet_values = values
-            self._cached_sheet_records = None
-            self._cached_sheet_timestamp = time.monotonic()
-            return values
+    def get_all_values(self) -> List[List[str]]:
+        return self._data_access.get_all_values()
 
     def get_all_records(self) -> List[Dict[str, Any]]:
-        with self._cache_lock:
-            if self._cached_sheet_records is not None and self._cache_valid():
-                logger.debug("Using cached Google Sheets records")
-                return self._cached_sheet_records
+        values = self.get_all_values()
+        if not values or len(values) <= 1:
+            return []
 
-            records = self.sheet.get_all_records()
-            self._cached_sheet_records = records
-            self._cached_sheet_values = None
-            self._cached_sheet_timestamp = time.monotonic()
-            return records
+        headers = values[0]
+        records: List[Dict[str, Any]] = []
+        for row in values[1:]:
+            padded = row + [""] * (len(headers) - len(row))
+            records.append(dict(zip(headers, padded)))
+        return records
 
     def clear_cache(self) -> None:
-        with self._cache_lock:
-            self._cached_sheet_timestamp = 0.0
-            self._cached_sheet_values = None
-            self._cached_sheet_records = None
+        self._data_access.clear_cache()
+
+    @classmethod
+    def cache_clear(cls) -> None:
+        if cls._singleton_instance is not None:
+            cls._singleton_instance.clear_cache()
 
     def _append_reading_records(self, records: list[ReadingRowRecord]) -> int:
-        if not records:
-            logger.warning("Google Sheets append skipped — no records to write")
-            return 0
-
         try:
-            headers = list(GMD_SHEET_HEADERS)
-            rows = [build_reading_row(record, headers) for record in records]
-            spreadsheet_id = get_spreadsheet_id()
-            worksheet_name = get_worksheet_name()
-            end_col = chr(ord("A") + len(headers) - 1)
-
-            logger.info(
-                "Google Sheets insert started spreadsheet_id=%s worksheet=%r row_count=%d "
-                "insert_at=A2:%s%d sample_area=%r sample_equipment=%r sample_parameter=%r "
-                "sample_value=%r verified_by=%r timestamp=%r",
-                spreadsheet_id,
-                worksheet_name,
-                len(rows),
-                end_col,
-                1 + len(rows),
-                records[0].area_tank if records else "",
-                records[0].equipment if records else "",
-                records[0].parameter_key if records else "",
-                records[0].value if records else "",
-                records[0].verified_by if records else "",
-                records[0].timestamp if records else "",
-            )
-
-            # Insert directly below the header so newest readings stay in column A
-            # and appear at the top of the dashboard (avoids gspread table-range drift).
-            self.sheet.insert_rows(rows, row=2, value_input_option="USER_ENTERED")
-            self.clear_cache()
-
-            logger.info(
-                "Google Sheets insert completed spreadsheet_id=%s worksheet=%r rows_inserted=%d",
-                spreadsheet_id,
-                worksheet_name,
-                len(rows),
-            )
-            return len(rows)
+            return self._data_access.append_reading_records(records)
         except Exception as exc:
             logger.error(
-                "Google Sheets append failed spreadsheet_id=%s worksheet=%r: %s",
+                "Google Sheets append failed spreadsheet_id=%s: %s",
                 get_spreadsheet_id(),
-                get_worksheet_name(),
                 exc,
                 exc_info=True,
             )
@@ -204,6 +131,12 @@ class GMDGoogleSheetsService:
         records: list[ReadingRowRecord] = []
 
         for parameter_key, value in readings.items():
+            status = classify_v2_parameter_status(
+                value=float(value),
+                equipment=equipment,
+                category=category,
+                parameter_key=str(parameter_key),
+            )
             record = ReadingRowRecord(
                 submission_id=submission_id,
                 timestamp=timestamp,
@@ -212,7 +145,7 @@ class GMDGoogleSheetsService:
                 parameter_key=str(parameter_key),
                 parameter_display_name=str(parameter_key),
                 value=float(value),
-                status="NORMAL",
+                status=status,
                 verified_by=verified_by,
                 remarks=remarks,
                 entry_source=entry_source,
@@ -276,6 +209,12 @@ class GMDGoogleSheetsService:
 
         records: list[ReadingRowRecord] = []
         for parameter_key, value in readings.items():
+            status = classify_v2_parameter_status(
+                value=float(value),
+                equipment=equipment,
+                category=category,
+                parameter_key=parameter_key,
+            )
             record = ReadingRowRecord(
                 submission_id=resolved_submission_id,
                 timestamp=timestamp,
@@ -287,7 +226,7 @@ class GMDGoogleSheetsService:
                 parameter_display_name=parameter_locations.get(parameter_key, ""),
                 unit=units.get(parameter_key, ""),
                 value=float(value),
-                status="NORMAL",
+                status=status,
                 verified_by=verified_by,
                 remarks=remarks,
                 media_name=media_name,
