@@ -11,7 +11,16 @@ import {
   Legend,
 } from "recharts";
 import { getApiBase } from "@/lib/api";
-import { parseTimestamp } from "@/lib/dashboardAnalytics";
+import {
+  buildConfigLookups,
+  matchConfiguredEquipmentInArea,
+  parseTimestamp,
+  resolveReadingArea,
+} from "@/lib/dashboardAnalytics";
+import {
+  getEquipmentForTrendsArea,
+  getTrendsAreaOptions,
+} from "@/lib/trendsAnalytics";
 
 const API = getApiBase();
 const STANDARD_PARAMETERS = [
@@ -92,26 +101,64 @@ const formatTimestamp = (value) => {
   });
 };
 
+function readingMatchesEquipment(row, equipmentEntry, area, lookups) {
+  if (!row || !equipmentEntry || !area) return false;
+  if (resolveReadingArea(row, lookups) !== area) return false;
+
+  const meta = matchConfiguredEquipmentInArea(row, area, lookups);
+  if (!meta || meta.display_name !== equipmentEntry.display_name) return false;
+
+  if (equipmentEntry.tag_no) {
+    const rowTag = String(row.tag_no || "").trim();
+    if (rowTag && rowTag !== equipmentEntry.tag_no) return false;
+  }
+
+  return true;
+}
+
 const ConditionMonitoring = () => {
+  const lookups = useMemo(() => buildConfigLookups(), []);
+  const areaOptions = useMemo(() => getTrendsAreaOptions(), []);
+
   const [readings, setReadings] = useState([]);
-  const [equipmentList, setEquipmentList] = useState([]);
-  const [selectedEquipment, setSelectedEquipment] = useState("");
+  const [selectedArea, setSelectedArea] = useState("");
+  const [selectedEquipmentEntry, setSelectedEquipmentEntry] = useState(null);
   const [selectedParameter, setSelectedParameter] = useState("Temperature");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+
+  const selectedEquipment = selectedEquipmentEntry?.display_name || "";
+
+  const equipmentEntries = useMemo(
+    () => (selectedArea ? getEquipmentForTrendsArea(selectedArea) : []),
+    [selectedArea]
+  );
+
+  const equipmentWithReadings = useMemo(() => {
+    if (!selectedArea) return new Set();
+    const names = new Set();
+    for (const row of readings) {
+      if (resolveReadingArea(row, lookups) !== selectedArea) continue;
+      const meta = matchConfiguredEquipmentInArea(row, selectedArea, lookups);
+      if (meta) names.add(meta.display_name);
+    }
+    return names;
+  }, [readings, selectedArea, lookups]);
 
   const dataSourceLabel = "Google Sheets";
   const dataSourceStatus = "Connected";
 
   useEffect(() => {
     loadReadings();
+    const onReadingsUpdated = () => loadReadings();
+    window.addEventListener("gmd-readings-updated", onReadingsUpdated);
+    return () => window.removeEventListener("gmd-readings-updated", onReadingsUpdated);
   }, []);
 
-  useEffect(() => {
-    if (!selectedEquipment && equipmentList.length > 0) {
-      setSelectedEquipment(equipmentList[0]);
-    }
-  }, [equipmentList, selectedEquipment]);
+  const handleAreaChange = (area) => {
+    setSelectedArea(area);
+    setSelectedEquipmentEntry(null);
+  };
 
   const loadReadings = async () => {
     setLoading(true);
@@ -121,29 +168,20 @@ const ConditionMonitoring = () => {
       const response = await axios.get(`${API}/reports/readings`);
       const rows = Array.isArray(response.data) ? response.data : [];
       setReadings(rows);
-
-      const equipment = Array.from(
-        new Set(
-          rows
-            .map((row) => (row.equipment || "").trim())
-            .filter(Boolean)
-        )
-      ).sort();
-
-      setEquipmentList(equipment);
     } catch (e) {
       console.error("Failed to load condition monitoring readings:", e);
       setError("Unable to load equipment readings. Please try again later.");
       setReadings([]);
-      setEquipmentList([]);
     } finally {
       setLoading(false);
     }
   };
 
   const parameterOptions = useMemo(() => {
-    const equipmentRows = readings.filter(
-      (row) => row.equipment === selectedEquipment
+    if (!selectedEquipmentEntry) return [];
+
+    const equipmentRows = readings.filter((row) =>
+      readingMatchesEquipment(row, selectedEquipmentEntry, selectedArea, lookups)
     );
 
     const parameterKeys = new Map();
@@ -163,7 +201,7 @@ const ConditionMonitoring = () => {
       ...standard.map((key) => formatParameterLabel(key)),
       ...others.map((key) => formatParameterLabel(key)),
     ];
-  }, [readings, selectedEquipment]);
+  }, [readings, selectedEquipmentEntry, selectedArea, lookups]);
 
   useEffect(() => {
     if (
@@ -174,16 +212,30 @@ const ConditionMonitoring = () => {
     }
   }, [parameterOptions, selectedParameter]);
 
+  useEffect(() => {
+    if (!selectedEquipmentEntry) return;
+    const stillValid = equipmentEntries.some(
+      (entry) =>
+        entry.display_name === selectedEquipmentEntry.display_name &&
+        entry.tag_no === selectedEquipmentEntry.tag_no
+    );
+    if (!stillValid) setSelectedEquipmentEntry(null);
+  }, [equipmentEntries, selectedEquipmentEntry]);
+
   const equipmentRows = useMemo(
     () =>
-      readings
-        .filter((row) => row.equipment === selectedEquipment)
-        .sort((a, b) => {
-          const left = parseTimestamp(a.timestamp)?.getTime() ?? 0;
-          const right = parseTimestamp(b.timestamp)?.getTime() ?? 0;
-          return right - left;
-        }),
-    [readings, selectedEquipment]
+      selectedEquipmentEntry
+        ? readings
+            .filter((row) =>
+              readingMatchesEquipment(row, selectedEquipmentEntry, selectedArea, lookups)
+            )
+            .sort((a, b) => {
+              const left = parseTimestamp(a.timestamp)?.getTime() ?? 0;
+              const right = parseTimestamp(b.timestamp)?.getTime() ?? 0;
+              return right - left;
+            })
+        : [],
+    [readings, selectedEquipmentEntry, selectedArea, lookups]
   );
 
   const latestTimestamp = useMemo(() => equipmentRows[0]?.timestamp || null, [equipmentRows]);
@@ -226,14 +278,16 @@ const ConditionMonitoring = () => {
     };
   }, [equipmentRows, parameterOptions.length, selectedEquipment, latestTimestamp]);
 
-  const totalEquipments = equipmentList.length;
+  const totalEquipments = selectedArea ? equipmentEntries.length : null;
   const totalParameters = parameterOptions.length;
   const historicalRecords = equipmentRows.length;
   const lastUpdatedText = latestTimestamp ? formatTimestamp(latestTimestamp) : "—";
 
-  const equipmentCountLabel = `${totalEquipments} Active Equipment`;
-  const parameterCountLabel = `${totalParameters} Parameters`;
-  const historicalRecordsLabel = `${historicalRecords} Readings`;
+  const equipmentCountLabel = selectedArea
+    ? `${totalEquipments} Equipment in ${selectedArea}`
+    : "Select an area";
+  const parameterCountLabel = selectedEquipment ? `${totalParameters} Parameters` : "—";
+  const historicalRecordsLabel = selectedEquipment ? `${historicalRecords} Readings` : "—";
 
   const chartData = useMemo(() => {
     return equipmentRows
@@ -279,8 +333,8 @@ const ConditionMonitoring = () => {
 
       <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-5 mb-6">
         <div className="rounded-none border border-zinc-200 bg-white px-5 py-4">
-          <p className="text-[10px] uppercase tracking-[0.2em] text-zinc-500 font-bold">Equipment Count</p>
-          <p className="mt-3 text-3xl font-semibold text-zinc-950">{equipmentCountLabel}</p>
+          <p className="text-[10px] uppercase tracking-[0.2em] text-zinc-500 font-bold">Area Equipment</p>
+          <p className="mt-3 text-2xl font-semibold text-zinc-950">{equipmentCountLabel}</p>
         </div>
         <div className="rounded-none border border-zinc-200 bg-white px-5 py-4">
           <p className="text-[10px] uppercase tracking-[0.2em] text-zinc-500 font-bold">Parameters Monitored</p>
@@ -311,26 +365,69 @@ const ConditionMonitoring = () => {
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-12">
         <div className="lg:col-span-3">
           <div className="rounded-none border border-zinc-200 bg-white p-6 mb-4">
+            <h2 className="text-lg font-medium text-zinc-900 mb-1">Area / Tank</h2>
+            <p className="text-xs text-zinc-500 mb-4">Select an area to browse its equipment</p>
+            <select
+              value={selectedArea}
+              onChange={(event) => handleAreaChange(event.target.value)}
+              className="w-full rounded-none border border-zinc-200 bg-zinc-50 px-4 py-3 text-sm text-zinc-900 outline-none focus:border-[#002FA7] focus:ring-2 focus:ring-[#002FA7]/10"
+            >
+              <option value="">Choose area…</option>
+              {areaOptions.map((area) => (
+                <option key={area} value={area}>
+                  {area}
+                </option>
+              ))}
+            </select>
+            {selectedArea ? (
+              <p className="mt-3 text-xs text-zinc-600">
+                {equipmentEntries.length} configured equipment
+                {equipmentWithReadings.size > 0
+                  ? ` · ${equipmentWithReadings.size} with historical readings`
+                  : ""}
+              </p>
+            ) : null}
+          </div>
+
+          <div className="rounded-none border border-zinc-200 bg-white p-6 mb-4">
             <h2 className="text-lg font-medium text-zinc-900 mb-4">Equipment</h2>
-            {loading ? (
+            {!selectedArea ? (
+              <div className="text-sm text-zinc-500">Select an area to view equipment.</div>
+            ) : loading ? (
               <div className="text-sm text-zinc-600">Loading equipment list...</div>
-            ) : equipmentList.length === 0 ? (
-              <div className="text-sm text-zinc-500">No equipment available.</div>
+            ) : equipmentEntries.length === 0 ? (
+              <div className="text-sm text-zinc-500">No equipment configured for this area.</div>
             ) : (
-              <div className="space-y-2">
-                {equipmentList.map((equipment) => (
-                  <button
-                    key={equipment}
-                    onClick={() => setSelectedEquipment(equipment)}
-                    className={`w-full text-left rounded-none border px-4 py-3 text-sm font-medium transition ${
-                      selectedEquipment === equipment
-                        ? "border-[#002FA7] bg-[#002FA7] text-white"
-                        : "border-zinc-200 bg-white text-zinc-700 hover:border-zinc-400"
-                    }`}
-                  >
-                    {equipment}
-                  </button>
-                ))}
+              <div className="space-y-2 max-h-[28rem] overflow-y-auto pr-1">
+                {equipmentEntries.map((entry) => {
+                  const isSelected =
+                    selectedEquipmentEntry?.display_name === entry.display_name &&
+                    selectedEquipmentEntry?.tag_no === entry.tag_no;
+                  const hasReadings = equipmentWithReadings.has(entry.display_name);
+
+                  return (
+                    <button
+                      key={`${entry.id}-${entry.tag_no || entry.display_name}`}
+                      onClick={() => setSelectedEquipmentEntry(entry)}
+                      className={`w-full text-left rounded-none border px-4 py-3 text-sm transition ${
+                        isSelected
+                          ? "border-[#002FA7] bg-[#002FA7] text-white"
+                          : "border-zinc-200 bg-white text-zinc-700 hover:border-zinc-400"
+                      }`}
+                    >
+                      <span className="font-medium block">{entry.display_name}</span>
+                      <span
+                        className={`mt-1 block text-xs ${
+                          isSelected ? "text-white/80" : "text-zinc-500"
+                        }`}
+                      >
+                        {entry.category}
+                        {entry.tag_no ? ` · ${entry.tag_no}` : ""}
+                        {!hasReadings ? " · No readings yet" : ""}
+                      </span>
+                    </button>
+                  );
+                })}
               </div>
             )}
           </div>
@@ -340,9 +437,12 @@ const ConditionMonitoring = () => {
             <select
               value={selectedParameter}
               onChange={(event) => setSelectedParameter(event.target.value)}
-              className="w-full rounded-none border border-zinc-200 bg-zinc-50 px-4 py-3 text-sm text-zinc-900 outline-none focus:border-[#002FA7] focus:ring-2 focus:ring-[#002FA7]/10"
+              disabled={!selectedEquipment}
+              className="w-full rounded-none border border-zinc-200 bg-zinc-50 px-4 py-3 text-sm text-zinc-900 outline-none focus:border-[#002FA7] focus:ring-2 focus:ring-[#002FA7]/10 disabled:cursor-not-allowed disabled:opacity-60"
             >
-              {parameterOptions.length > 0 ? (
+              {!selectedEquipment ? (
+                <option value="">Select equipment first</option>
+              ) : parameterOptions.length > 0 ? (
                 parameterOptions.map((parameter) => (
                   <option key={parameter} value={parameter}>
                     {parameter}
@@ -360,9 +460,11 @@ const ConditionMonitoring = () => {
             <div className="mb-6 flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
               <div>
                 <h2 className="text-lg font-medium text-zinc-900">
-                  {selectedEquipment
-                    ? `${selectedEquipment} — Historical ${selectedParameter} Trend`
-                    : "Select equipment to view readings"}
+                  {!selectedArea
+                    ? "Select an area to begin"
+                    : !selectedEquipment
+                    ? `${selectedArea} — Select equipment to view readings`
+                    : `${selectedArea} · ${selectedEquipment} — Historical ${selectedParameter} Trend`}
                 </h2>
                 {selectedEquipment && (
                   <p className="text-sm text-zinc-600 mt-1">{equipmentRows.length} readings available.</p>
@@ -370,128 +472,136 @@ const ConditionMonitoring = () => {
               </div>
             </div>
 
-            {selectedEquipment && !loading && (
-              <div className="rounded-none border border-zinc-200 bg-white p-6 mb-6">
-                <div className="flex items-center justify-between mb-4">
-                  <h3 className="text-sm font-medium text-zinc-900">Latest Reading Snapshot</h3>
-                  <p className="text-xs text-zinc-500">As of {equipmentSummary.latestReadingTimestamp}</p>
-                </div>
-                <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-                  {latestReadingsByParameter.length === 0 ? (
-                    <div className="col-span-full text-sm text-zinc-500">No latest snapshot data available.</div>
-                  ) : (
-                    latestReadingsByParameter.map((row) => (
-                      <div key={normalizeParameterKey(row.parameter)} className="rounded-none border border-zinc-200 bg-zinc-50 p-4">
-                        <p className="text-xs uppercase tracking-[0.2em] text-zinc-500 font-bold">{formatParameterLabel(row.parameter)}</p>
-                        <p className="mt-3 text-2xl font-semibold text-zinc-950">{formatParameterDisplayValue(row.parameter, row.value)}</p>
-                      </div>
-                    ))
-                  )}
-                </div>
-              </div>
-            )}
-
-            {selectedEquipment && !loading && (
-              <div className="rounded-none border border-zinc-200 bg-white p-5 mb-6">
-                <h3 className="text-sm font-medium text-zinc-900 mb-4">Equipment Summary</h3>
-                <dl className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-                  <div className="space-y-1">
-                    <dt className="text-[10px] uppercase tracking-[0.2em] text-zinc-500 font-bold">Equipment Name</dt>
-                    <dd className="text-sm text-zinc-900 font-medium">{equipmentSummary.name}</dd>
-                  </div>
-                  <div className="space-y-1">
-                    <dt className="text-[10px] uppercase tracking-[0.2em] text-zinc-500 font-bold">Category</dt>
-                    <dd className="text-sm text-zinc-900 font-medium">{equipmentSummary.category}</dd>
-                  </div>
-                  <div className="space-y-1">
-                    <dt className="text-[10px] uppercase tracking-[0.2em] text-zinc-500 font-bold">Parameters Monitored</dt>
-                    <dd className="text-sm text-zinc-900 font-medium">{equipmentSummary.parametersMonitoredCount} Parameters</dd>
-                  </div>
-                  <div className="space-y-1">
-                    <dt className="text-[10px] uppercase tracking-[0.2em] text-zinc-500 font-bold">Historical Records Count</dt>
-                    <dd className="text-sm text-zinc-900 font-medium">{equipmentSummary.historicalRecordsCount}</dd>
-                  </div>
-                  <div className="space-y-1">
-                    <dt className="text-[10px] uppercase tracking-[0.2em] text-zinc-500 font-bold">Latest Reading Timestamp</dt>
-                    <dd className="text-sm text-zinc-900 font-medium">{equipmentSummary.latestReadingTimestamp}</dd>
-                  </div>
-                  <div className="space-y-1">
-                    <dt className="text-[10px] uppercase tracking-[0.2em] text-zinc-500 font-bold">Last Verified By</dt>
-                    <dd className="text-sm text-zinc-900 font-medium">{equipmentSummary.lastVerifiedBy}</dd>
-                  </div>
-                </dl>
-              </div>
-            )}
-
-            {!selectedEquipment ? (
+            {!selectedArea ? (
               <div className="h-96 flex items-center justify-center">
-                <p className="text-sm text-zinc-500">Select equipment to view its readings.</p>
+                <p className="text-sm text-zinc-500">Choose an area / tank from the left panel.</p>
+              </div>
+            ) : !selectedEquipment ? (
+              <div className="h-96 flex items-center justify-center">
+                <p className="text-sm text-zinc-500">
+                  {equipmentEntries.length} equipment in {selectedArea}. Select one to view monitoring data.
+                </p>
               </div>
             ) : loading ? (
               <div className="h-96 flex items-center justify-center">
                 <p className="text-sm text-zinc-600">Loading data...</p>
               </div>
-            ) : chartData.length === 0 ? (
-              <div className="h-96 flex items-center justify-center">
-                <p className="text-sm text-zinc-500">No readings available for selected equipment</p>
-              </div>
             ) : (
-              <div data-testid="chart-container">
-                <ResponsiveContainer width="100%" height={450}>
-                  <LineChart data={chartData}>
-                    <CartesianGrid strokeDasharray="3 3" stroke="#e4e4e7" />
-                    <XAxis dataKey="time" tick={{ fontSize: 12, fill: "#71717a" }} stroke="#a1a1aa" />
-                    <YAxis tick={{ fontSize: 12, fill: "#71717a", fontFamily: "IBMPlexMono, monospace" }} stroke="#a1a1aa" />
-                    <Tooltip contentStyle={{ backgroundColor: "white", border: "1px solid #e4e4e7", borderRadius: 0, fontSize: 12 }} />
-                    <Legend wrapperStyle={{ fontSize: 12 }} />
-                    <Line type="monotone" dataKey="value" stroke="#002FA7" strokeWidth={2} dot={{ fill: "#002FA7", r: 4 }} activeDot={{ r: 6 }} name={selectedParameter} />
-                  </LineChart>
-                </ResponsiveContainer>
-              </div>
-            )}
-
-            {selectedEquipment && !loading && (
-              <div className="mt-6 border-t border-zinc-200 pt-6">
-                <h3 className="text-sm font-medium text-zinc-900 mb-3">Latest Readings</h3>
-                <div className="overflow-x-auto">
-                  <table className="w-full">
-                    <thead>
-                      <tr className="border-b border-zinc-200">
-                        <th className="text-left px-4 py-2 text-[10px] sm:text-xs uppercase tracking-[0.2em] font-bold text-zinc-500">Parameter</th>
-                        <th className="text-right px-4 py-2 text-[10px] sm:text-xs uppercase tracking-[0.2em] font-bold text-zinc-500">Value</th>
-                        <th className="text-left px-4 py-2 text-[10px] sm:text-xs uppercase tracking-[0.2em] font-bold text-zinc-500">Status</th>
-                        <th className="text-left px-4 py-2 text-[10px] sm:text-xs uppercase tracking-[0.2em] font-bold text-zinc-500">Timestamp</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {latestReadingsByParameter.length === 0 ? (
-                        <tr>
-                          <td colSpan={4} className="px-4 py-4 text-sm text-zinc-500 text-center">No latest readings available for selected equipment.</td>
-                        </tr>
-                      ) : (
-                        latestReadingsByParameter.map((row, idx) => (
-                          <tr key={idx} className="even:bg-zinc-50/50 border-b border-zinc-100">
-                            <td className="px-4 py-2 text-sm text-zinc-700">{formatParameterLabel(row.parameter)}</td>
-                            <td className="px-4 py-2 text-sm font-mono text-zinc-950 text-right">{formatParameterDisplayValue(row.parameter, row.value)}</td>
-                            <td className="px-4 py-2">
-                              <span className={`px-2 py-1 text-xs font-bold uppercase tracking-wider rounded-none ${
-                                row.status?.toLowerCase() === "alarm"
-                                  ? "bg-red-50 text-red-700"
-                                  : row.status?.toLowerCase() === "warning"
-                                  ? "bg-yellow-50 text-yellow-800"
-                                  : "bg-emerald-50 text-emerald-700"
-                              }`}>
-                                {row.status || "Unknown"}
-                              </span>
-                            </td>
-                            <td className="px-4 py-2 text-sm text-zinc-700 whitespace-nowrap">{formatTimestamp(row.timestamp)}</td>
-                          </tr>
-                        ))
-                      )}
-                    </tbody>
-                  </table>
+              <>
+                <div className="rounded-none border border-zinc-200 bg-white p-6 mb-6">
+                  <div className="flex items-center justify-between mb-4">
+                    <h3 className="text-sm font-medium text-zinc-900">Latest Reading Snapshot</h3>
+                    <p className="text-xs text-zinc-500">As of {equipmentSummary.latestReadingTimestamp}</p>
+                  </div>
+                  <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+                    {latestReadingsByParameter.length === 0 ? (
+                      <div className="col-span-full text-sm text-zinc-500">No latest snapshot data available.</div>
+                    ) : (
+                      latestReadingsByParameter.map((row) => (
+                        <div key={normalizeParameterKey(row.parameter)} className="rounded-none border border-zinc-200 bg-zinc-50 p-4">
+                          <p className="text-xs uppercase tracking-[0.2em] text-zinc-500 font-bold">{formatParameterLabel(row.parameter)}</p>
+                          <p className="mt-3 text-2xl font-semibold text-zinc-950">{formatParameterDisplayValue(row.parameter, row.value)}</p>
+                        </div>
+                      ))
+                    )}
+                  </div>
                 </div>
-              </div>
+
+                <div className="rounded-none border border-zinc-200 bg-white p-5 mb-6">
+                  <h3 className="text-sm font-medium text-zinc-900 mb-4">Equipment Summary</h3>
+                  <dl className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+                    <div className="space-y-1">
+                      <dt className="text-[10px] uppercase tracking-[0.2em] text-zinc-500 font-bold">Area / Tank</dt>
+                      <dd className="text-sm text-zinc-900 font-medium">{selectedArea}</dd>
+                    </div>
+                    <div className="space-y-1">
+                      <dt className="text-[10px] uppercase tracking-[0.2em] text-zinc-500 font-bold">Equipment Name</dt>
+                      <dd className="text-sm text-zinc-900 font-medium">{equipmentSummary.name}</dd>
+                    </div>
+                    <div className="space-y-1">
+                      <dt className="text-[10px] uppercase tracking-[0.2em] text-zinc-500 font-bold">Category</dt>
+                      <dd className="text-sm text-zinc-900 font-medium">{equipmentSummary.category}</dd>
+                    </div>
+                    <div className="space-y-1">
+                      <dt className="text-[10px] uppercase tracking-[0.2em] text-zinc-500 font-bold">Parameters Monitored</dt>
+                      <dd className="text-sm text-zinc-900 font-medium">{equipmentSummary.parametersMonitoredCount} Parameters</dd>
+                    </div>
+                    <div className="space-y-1">
+                      <dt className="text-[10px] uppercase tracking-[0.2em] text-zinc-500 font-bold">Historical Records Count</dt>
+                      <dd className="text-sm text-zinc-900 font-medium">{equipmentSummary.historicalRecordsCount}</dd>
+                    </div>
+                    <div className="space-y-1">
+                      <dt className="text-[10px] uppercase tracking-[0.2em] text-zinc-500 font-bold">Latest Reading Timestamp</dt>
+                      <dd className="text-sm text-zinc-900 font-medium">{equipmentSummary.latestReadingTimestamp}</dd>
+                    </div>
+                    <div className="space-y-1">
+                      <dt className="text-[10px] uppercase tracking-[0.2em] text-zinc-500 font-bold">Last Verified By</dt>
+                      <dd className="text-sm text-zinc-900 font-medium">{equipmentSummary.lastVerifiedBy}</dd>
+                    </div>
+                  </dl>
+                </div>
+
+                {chartData.length === 0 ? (
+                  <div className="h-96 flex items-center justify-center">
+                    <p className="text-sm text-zinc-500">No readings available for selected equipment</p>
+                  </div>
+                ) : (
+                  <div data-testid="chart-container">
+                    <ResponsiveContainer width="100%" height={450}>
+                      <LineChart data={chartData}>
+                        <CartesianGrid strokeDasharray="3 3" stroke="#e4e4e7" />
+                        <XAxis dataKey="time" tick={{ fontSize: 12, fill: "#71717a" }} stroke="#a1a1aa" />
+                        <YAxis tick={{ fontSize: 12, fill: "#71717a", fontFamily: "IBMPlexMono, monospace" }} stroke="#a1a1aa" />
+                        <Tooltip contentStyle={{ backgroundColor: "white", border: "1px solid #e4e4e7", borderRadius: 0, fontSize: 12 }} />
+                        <Legend wrapperStyle={{ fontSize: 12 }} />
+                        <Line type="monotone" dataKey="value" stroke="#002FA7" strokeWidth={2} dot={{ fill: "#002FA7", r: 4 }} activeDot={{ r: 6 }} name={selectedParameter} />
+                      </LineChart>
+                    </ResponsiveContainer>
+                  </div>
+                )}
+
+                <div className="mt-6 border-t border-zinc-200 pt-6">
+                  <h3 className="text-sm font-medium text-zinc-900 mb-3">Latest Readings</h3>
+                  <div className="overflow-x-auto">
+                    <table className="w-full">
+                      <thead>
+                        <tr className="border-b border-zinc-200">
+                          <th className="text-left px-4 py-2 text-[10px] sm:text-xs uppercase tracking-[0.2em] font-bold text-zinc-500">Parameter</th>
+                          <th className="text-right px-4 py-2 text-[10px] sm:text-xs uppercase tracking-[0.2em] font-bold text-zinc-500">Value</th>
+                          <th className="text-left px-4 py-2 text-[10px] sm:text-xs uppercase tracking-[0.2em] font-bold text-zinc-500">Status</th>
+                          <th className="text-left px-4 py-2 text-[10px] sm:text-xs uppercase tracking-[0.2em] font-bold text-zinc-500">Timestamp</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {latestReadingsByParameter.length === 0 ? (
+                          <tr>
+                            <td colSpan={4} className="px-4 py-4 text-sm text-zinc-500 text-center">No latest readings available for selected equipment.</td>
+                          </tr>
+                        ) : (
+                          latestReadingsByParameter.map((row, idx) => (
+                            <tr key={idx} className="even:bg-zinc-50/50 border-b border-zinc-100">
+                              <td className="px-4 py-2 text-sm text-zinc-700">{formatParameterLabel(row.parameter)}</td>
+                              <td className="px-4 py-2 text-sm font-mono text-zinc-950 text-right">{formatParameterDisplayValue(row.parameter, row.value)}</td>
+                              <td className="px-4 py-2">
+                                <span className={`px-2 py-1 text-xs font-bold uppercase tracking-wider rounded-none ${
+                                  row.status?.toLowerCase() === "alarm"
+                                    ? "bg-red-50 text-red-700"
+                                    : row.status?.toLowerCase() === "warning"
+                                    ? "bg-yellow-50 text-yellow-800"
+                                    : "bg-emerald-50 text-emerald-700"
+                                }`}>
+                                  {row.status || "Unknown"}
+                                </span>
+                              </td>
+                              <td className="px-4 py-2 text-sm text-zinc-700 whitespace-nowrap">{formatTimestamp(row.timestamp)}</td>
+                            </tr>
+                          ))
+                        )}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              </>
             )}
           </div>
         </div>
