@@ -12,6 +12,7 @@ import {
   formatDateTime,
   getParameterDisplay,
   groupAreaEquipmentByCategory,
+  readingVisibleInDashboardArea,
   resolveReadingArea,
 } from "@/lib/dashboardAnalytics";
 
@@ -73,7 +74,7 @@ export default function EquipmentSummaryDrawer({
 
   const latestReadings = (recentReadings || [])
     .filter((row) => {
-      if (isArea) return resolveReadingArea(row, lookups) === areaName;
+      if (isArea) return readingVisibleInDashboardArea(row, areaName, lookups);
       return row.equipment === equipmentName || row.tag_no === tagNo;
     })
     .slice(0, 8);

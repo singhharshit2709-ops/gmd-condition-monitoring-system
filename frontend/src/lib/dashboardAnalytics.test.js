@@ -5,11 +5,13 @@ import {
   computeRoundCompletion,
   computeTodayCompletedEquipment,
   computeTodayMetrics,
+  getDashboardAreasForReading,
   isToday,
   formatRelativeTime,
   matchConfiguredEquipmentInArea,
   normalizeAreaKey,
   parseTimestamp,
+  readingVisibleInDashboardArea,
   resolveReadingArea,
 } from "./dashboardAnalytics";
 
@@ -87,6 +89,62 @@ describe("dashboardAnalytics aggregation", () => {
     expect(
       matchConfiguredEquipmentInArea(reading, "DM Water Electrode Cooling", lookups)?.display_name
     ).toBe("E Tank Electrode Cooling");
+    expect(matchConfiguredEquipmentInArea(reading, "E Tank", lookups)?.display_name).toBe(
+      "E Tank Electrode Cooling"
+    );
+  });
+
+  test("DM water readings are visible in physical tank and virtual DM area", () => {
+    const tanks = [
+      ["A Tank", "A Tank Electrode Cooling"],
+      ["E Tank", "E Tank Electrode Cooling"],
+      ["G Tank", "G Tank Electrode Cooling"],
+      ["K Tank", "K Tank Electrode Cooling"],
+    ];
+
+    for (const [tank, equipment] of tanks) {
+      const reading = {
+        area_tank: tank,
+        category: "DM Water Electrode Cooling",
+        equipment,
+        timestamp: todayTimestamp(10, 0),
+        status: "NORMAL",
+      };
+
+      expect(getDashboardAreasForReading(reading, lookups)).toEqual(
+        expect.arrayContaining([tank, "DM Water Electrode Cooling"])
+      );
+      expect(readingVisibleInDashboardArea(reading, tank, lookups)).toBe(true);
+      expect(readingVisibleInDashboardArea(reading, "DM Water Electrode Cooling", lookups)).toBe(
+        true
+      );
+
+      const summaries = computeAreaSummaries([], [reading], lookups);
+      const tankSummary = summaries.find((row) => row.area === tank);
+      const dmSummary = summaries.find((row) => row.area === "DM Water Electrode Cooling");
+
+      expect(tankSummary?.hasTodayReadings).toBe(true);
+      expect(dmSummary?.hasTodayReadings).toBe(true);
+    }
+  });
+
+  test("DM water round completion counts toward physical tank and DM virtual area", () => {
+    const reading = {
+      area_tank: "A Tank",
+      category: "DM Water Electrode Cooling",
+      equipment: "A Tank Electrode Cooling",
+      timestamp: todayTimestamp(9, 0),
+      status: "NORMAL",
+    };
+
+    const round = computeRoundCompletion([reading], lookups);
+    const aTank = round.find((row) => row.area === "A Tank");
+    const dmArea = round.find((row) => row.area === "DM Water Electrode Cooling");
+
+    expect(aTank?.completed).toBe(1);
+    expect(aTank?.hasTodaySubmissions).toBe(true);
+    expect(dmArea?.completed).toBe(1);
+    expect(dmArea?.hasTodaySubmissions).toBe(true);
   });
 
   test("E Tank blower submission updates area health and round completion", () => {
@@ -105,17 +163,18 @@ describe("dashboardAnalytics aggregation", () => {
 
     const round = computeRoundCompletion(readings, lookups);
     const eTank = round.find((row) => row.area === "E Tank");
+    const eTankTotal = (lookups.areaEquipment.get("E Tank") || []).length;
     expect(eTank.completed).toBe(1);
-    expect(eTank.total).toBe(12);
-    expect(eTank.percent).toBe(8);
-    expect(eTank.remaining).toBe(11);
+    expect(eTank.total).toBe(eTankTotal);
+    expect(eTank.percent).toBe(Math.round((1 / eTankTotal) * 100));
+    expect(eTank.remaining).toBe(eTankTotal - 1);
     expect(eTank.hasTodaySubmissions).toBe(true);
 
     const summaries = computeAreaSummaries([], readings, lookups);
     const eSummary = summaries.find((row) => row.area === "E Tank");
     expect(eSummary.hasTodayReadings).toBe(true);
     expect(eSummary.normal).toBe(1);
-    expect(eSummary.pendingToday).toBe(11);
+    expect(eSummary.pendingToday).toBe(eTankTotal - 1);
     expect(eSummary.healthPercent).toBe(100);
     expect(eSummary.areaStatus).toBe("NORMAL");
   });

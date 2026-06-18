@@ -244,8 +244,16 @@ export function buildConfigLookups(config = loadGmdConfigV2()) {
     }
 
     const bucket = resolveDashboardArea(meta);
-    if (!areaEquipment.has(bucket)) areaEquipment.set(bucket, []);
-    areaEquipment.get(bucket).push(meta);
+    appendUniqueEquipmentMeta(areaEquipment, bucket, meta);
+    if (DM_WATER_CATEGORIES.has(meta.category) && meta.area) {
+      const physicalArea = resolveCanonicalDashboardArea(meta.area, {
+        canonicalAreaByNormalized,
+        dashboardAreaOrder,
+      });
+      if (physicalArea && physicalArea !== bucket) {
+        appendUniqueEquipmentMeta(areaEquipment, physicalArea, meta);
+      }
+    }
 
     const sections = entry.sections || [];
     for (const section of sections) {
@@ -342,6 +350,55 @@ export function matchConfiguredEquipmentInArea(row, dashboardArea, lookups) {
   return null;
 }
 
+function equipmentMetaKey(meta) {
+  return `${meta.display_name}::${meta.tag_no || ""}`;
+}
+
+function appendUniqueEquipmentMeta(areaEquipment, areaName, meta) {
+  if (!areaName || !meta) return;
+  if (!areaEquipment.has(areaName)) areaEquipment.set(areaName, []);
+  const list = areaEquipment.get(areaName);
+  const key = equipmentMetaKey(meta);
+  if (!list.some((item) => equipmentMetaKey(item) === key)) {
+    list.push(meta);
+  }
+}
+
+/**
+ * Physical tank area for DM Water category readings (A/E/G/K Tank).
+ * Returns empty string when not applicable.
+ */
+export function getPhysicalTankAreaForReading(row, lookups) {
+  if (!row?.category || !DM_WATER_CATEGORIES.has(row.category)) return "";
+  const areaTank = normalizeAreaKey(row.area_tank);
+  if (!areaTank) return "";
+  return resolveCanonicalDashboardArea(areaTank, lookups);
+}
+
+/**
+ * Dashboard areas where a reading must appear.
+ * DM Water readings are visible in both the virtual DM bucket and their physical tank.
+ */
+export function getDashboardAreasForReading(row, lookups) {
+  const areas = [];
+  const seen = new Set();
+  const add = (area) => {
+    if (!area || seen.has(area)) return;
+    seen.add(area);
+    areas.push(area);
+  };
+
+  add(resolveReadingArea(row, lookups));
+  add(getPhysicalTankAreaForReading(row, lookups));
+  return areas;
+}
+
+/** True when a reading belongs to a dashboard area (including shared DM Water equipment). */
+export function readingVisibleInDashboardArea(row, dashboardArea, lookups) {
+  if (!row || !dashboardArea || !lookups) return false;
+  return getDashboardAreasForReading(row, lookups).includes(dashboardArea);
+}
+
 export function deriveAreaStatus({ alarm, warning, hasTodayReadings }) {
   if (!hasTodayReadings) return "PENDING";
   if (alarm > 0) return "ALARM";
@@ -359,12 +416,14 @@ export function getTodayTouchedByArea(recentReadings, lookups) {
 
   for (const row of recentReadings || []) {
     if (!isToday(parseTimestamp(row.timestamp))) continue;
-    const area = resolveReadingArea(row, lookups);
-    const bucket = touched.get(area);
-    if (!bucket) continue;
 
-    const meta = matchConfiguredEquipmentInArea(row, area, lookups);
-    if (meta) bucket.add(normalizeEquipmentKey(meta.display_name).toLowerCase());
+    for (const area of getDashboardAreasForReading(row, lookups)) {
+      const bucket = touched.get(area);
+      if (!bucket) continue;
+
+      const meta = matchConfiguredEquipmentInArea(row, area, lookups);
+      if (meta) bucket.add(normalizeEquipmentKey(meta.display_name).toLowerCase());
+    }
   }
 
   return touched;
@@ -419,7 +478,7 @@ export function computeAreaSummaries(equipmentHealth, recentReadings, lookups) {
 
       for (const row of recentReadings || []) {
         if (!isToday(parseTimestamp(row.timestamp))) continue;
-        if (resolveReadingArea(row, lookups) !== area) continue;
+        if (!readingVisibleInDashboardArea(row, area, lookups)) continue;
         const ts = parseTimestamp(row.timestamp);
         if (ts && (!lastUpdated || ts > lastUpdated)) lastUpdated = ts;
       }
@@ -463,10 +522,15 @@ export function computeTodayMetrics(recentReadings, lookups) {
   const equipmentToday = new Set();
 
   for (const row of todayRows) {
-    const area = resolveReadingArea(row, lookups);
-    const meta = matchConfiguredEquipmentInArea(row, area, lookups);
+    let meta = null;
+    for (const area of getDashboardAreasForReading(row, lookups)) {
+      meta = matchConfiguredEquipmentInArea(row, area, lookups);
+      if (meta) break;
+    }
     if (meta) {
-      equipmentToday.add(`${area}::${normalizeEquipmentKey(meta.display_name)}`);
+      equipmentToday.add(
+        `${normalizeAreaKey(meta.area)}::${normalizeEquipmentKey(meta.display_name)}`
+      );
     }
   }
 
@@ -485,7 +549,7 @@ export function computeRoundCompletion(recentReadings, lookups) {
 
     for (const row of recentReadings || []) {
       if (!isToday(parseTimestamp(row.timestamp))) continue;
-      if (resolveReadingArea(row, lookups) !== area) continue;
+      if (!readingVisibleInDashboardArea(row, area, lookups)) continue;
       const meta = matchConfiguredEquipmentInArea(row, area, lookups);
       if (meta) touchedDisplayNames.add(meta.display_name);
     }
@@ -645,8 +709,13 @@ export function filterDashboardData({
   };
 
   const matchesFilters = (row) => {
-    const area = resolveReadingArea(row, lookups);
-    if (filters.area && filters.area !== "all" && area !== filters.area) return false;
+    if (
+      filters.area &&
+      filters.area !== "all" &&
+      !readingVisibleInDashboardArea(row, filters.area, lookups)
+    ) {
+      return false;
+    }
     if (filters.category && filters.category !== "all" && row.category !== filters.category) return false;
     if (filters.equipment && filters.equipment !== "all" && row.equipment !== filters.equipment) return false;
     if (filters.tagNo && filters.tagNo !== "all" && row.tag_no !== filters.tagNo) return false;
@@ -835,8 +904,14 @@ export function findMostRecentResolvedAlert(recentReadings, activeAlarms, lookup
 }
 
 function rowMatchesFilters(row, filters, lookups, omitKey = null) {
-  const area = resolveReadingArea(row, lookups);
-  if (omitKey !== "area" && filters.area && filters.area !== "all" && area !== filters.area) return false;
+  if (
+    omitKey !== "area" &&
+    filters.area &&
+    filters.area !== "all" &&
+    !readingVisibleInDashboardArea(row, filters.area, lookups)
+  ) {
+    return false;
+  }
   if (omitKey !== "category" && filters.category && filters.category !== "all" && row.category !== filters.category)
     return false;
   if (omitKey !== "equipment" && filters.equipment && filters.equipment !== "all" && row.equipment !== filters.equipment)

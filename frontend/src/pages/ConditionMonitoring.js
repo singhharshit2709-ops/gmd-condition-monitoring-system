@@ -15,6 +15,7 @@ import {
   buildConfigLookups,
   matchConfiguredEquipmentInArea,
   parseTimestamp,
+  readingVisibleInDashboardArea,
   resolveReadingArea,
 } from "@/lib/dashboardAnalytics";
 import {
@@ -103,7 +104,7 @@ const formatTimestamp = (value) => {
 
 function readingMatchesEquipment(row, equipmentEntry, area, lookups) {
   if (!row || !equipmentEntry || !area) return false;
-  if (resolveReadingArea(row, lookups) !== area) return false;
+  if (!readingVisibleInDashboardArea(row, area, lookups)) return false;
 
   const meta = matchConfiguredEquipmentInArea(row, area, lookups);
   if (!meta || meta.display_name !== equipmentEntry.display_name) return false;
@@ -138,7 +139,7 @@ const ConditionMonitoring = () => {
     if (!selectedArea) return new Set();
     const names = new Set();
     for (const row of readings) {
-      if (resolveReadingArea(row, lookups) !== selectedArea) continue;
+      if (!readingVisibleInDashboardArea(row, selectedArea, lookups)) continue;
       const meta = matchConfiguredEquipmentInArea(row, selectedArea, lookups);
       if (meta) names.add(meta.display_name);
     }
