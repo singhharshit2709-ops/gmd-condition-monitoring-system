@@ -1575,9 +1575,24 @@ async def dashboard_root():
 async def dashboard_spa_or_asset(spa_path: str):
     if spa_path.startswith(_SPA_API_PREFIXES):
         raise HTTPException(status_code=404, detail="Not Found")
+
     asset = STATIC_DIR / spa_path
     if asset.is_file():
         return FileResponse(asset)
+
+    # CRA builds reference assets under "/static/js/..." and "/static/css/...",
+    # but build.sh copies frontend/build/* directly into backend/static without
+    # preserving that extra "static/" nesting level (assets land at
+    # backend/static/js/... and backend/static/css/...). Without this fallback,
+    # every JS/CSS request 404s against the wrong path and silently falls
+    # through to index.html with a 200 -- which is why the browser tries to
+    # execute HTML as JavaScript ("Unexpected token '<'") and the dashboard
+    # renders blank.
+    if spa_path.startswith("static/"):
+        alt_asset = STATIC_DIR / spa_path[len("static/"):]
+        if alt_asset.is_file():
+            return FileResponse(alt_asset)
+
     return _serve_dashboard_index()
 if __name__ == "__main__":
     import uvicorn
