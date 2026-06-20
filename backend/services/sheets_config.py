@@ -128,11 +128,33 @@ def load_service_account_credentials() -> Tuple[Any, str]:
     if json_blob:
         try:
             creds_dict = json.loads(json_blob)
+            # Render (and other cloud providers) often escape literal newlines in
+            # multi-line env vars, turning the real "\n" line breaks inside the
+            # RSA private_key into the two-character sequence "\\n". Google's
+            # auth library cannot parse a key in that form and raises
+            # "Could not deserialize key data". Normalize it back here so the
+            # key is always well-formed regardless of how the host stored it.
+            creds_dict["private_key"] = creds_dict["private_key"].replace(
+                "\\n", "\n"
+            )
             creds = Credentials.from_service_account_info(creds_dict, scopes=SCOPES)
             return creds, "GOOGLE_SERVICE_ACCOUNT_JSON"
         except json.JSONDecodeError as exc:
+            logger.error(
+                "GOOGLE_SERVICE_ACCOUNT_JSON could not be parsed as JSON: %s", exc
+            )
             raise RuntimeError(
                 "GOOGLE_SERVICE_ACCOUNT_JSON is invalid JSON."
+            ) from exc
+        except KeyError as exc:
+            logger.error(
+                "GOOGLE_SERVICE_ACCOUNT_JSON is missing expected key %s. "
+                "Ensure the full service account JSON (including private_key, "
+                "client_email, etc.) was pasted into the env var.",
+                exc,
+            )
+            raise RuntimeError(
+                f"GOOGLE_SERVICE_ACCOUNT_JSON is missing expected key {exc}."
             ) from exc
 
     file_env = (
